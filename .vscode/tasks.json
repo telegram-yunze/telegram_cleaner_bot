@@ -1,0 +1,88 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run FastAPI (uvicorn reload)",
+			"type": "shell",
+			"command": "d:/DevelopOrgs/telegram-yunze/telegram_cleaner_bot/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"uvicorn",
+				"app.main:app",
+				"--reload"
+			],
+			"isBackground": true
+		},
+		{
+			"label": "Install uvicorn",
+			"type": "shell",
+			"command": "d:/DevelopOrgs/telegram-yunze/telegram_cleaner_bot/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pip",
+				"install",
+				"uvicorn"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Update requirements after uvicorn",
+			"type": "shell",
+			"command": "d:/DevelopOrgs/telegram-yunze/telegram_cleaner_bot/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pip",
+				"freeze",
+				">",
+				"requirements.txt"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Run FastAPI (uvicorn reload)",
+			"type": "shell",
+			"command": "d:/DevelopOrgs/telegram-yunze/telegram_cleaner_bot/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"uvicorn",
+				"app.main:app",
+				"--reload"
+			],
+			"isBackground": true
+		},
+		{
+			"label": "Dump OpenAPI JSON",
+			"type": "shell",
+			"command": "d:/DevelopOrgs/telegram-yunze/telegram_cleaner_bot/.venv/Scripts/python.exe",
+			"args": [
+				"-c",
+				"from app.main import app; import json, pathlib; pathlib.Path('openapi.preview.json').write_text(json.dumps(app.openapi(), ensure_ascii=False, indent=2), encoding='utf-8'); print('ok')"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Dump OpenAPI JSON",
+			"type": "shell",
+			"command": "d:/DevelopOrgs/telegram-yunze/telegram_cleaner_bot/.venv/Scripts/python.exe",
+			"args": [
+				"-c",
+				"from app.main import app;import json,pathlib;pathlib.Path(\"openapi.preview.json\").write_text(json.dumps(app.openapi(),ensure_ascii=False,indent=2),encoding=\"utf-8\");print(\"ok\")"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Run auth and api tests",
+			"type": "shell",
+			"command": "d:/DevelopOrgs/telegram-yunze/telegram_cleaner_bot/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"unittest",
+				"tests.test_api_auth",
+				"tests.test_api_exception_handling",
+				"tests.test_request_id_integration",
+				"-v"
+			],
+			"isBackground": false
+		}
+	]
+}

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.config import get_runtime_api_secret_key
 from app.deps import get_db
 from app.exceptions import ResourceNotFoundError
 from app.main import app
@@ -31,6 +32,7 @@ class RequestIdIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         # 注入空 DB 会话，防止测试触发真实数据库
         app.dependency_overrides[get_db] = _override_get_db
+        self.auth_headers = {"X-API-Key": get_runtime_api_secret_key()}
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
@@ -55,12 +57,10 @@ class RequestIdIntegrationTests(unittest.TestCase):
     def test_error_body_request_id_matches_response_header(self) -> None:
         """404 错误响应体内的 request_id 与响应头应一致。"""
         custom_id = "deadbeefdeadbeefdeadbeefdeadbeef"
+        headers = {**self.auth_headers, "X-Request-ID": custom_id}
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get(
-                    "/groups/99999999",
-                    headers={"X-Request-ID": custom_id},
-                )
+                response = client.get("/groups/99999999", headers=headers)
 
         self.assertEqual(response.status_code, 404)
         body = response.json()
@@ -71,7 +71,7 @@ class RequestIdIntegrationTests(unittest.TestCase):
         """自动生成的 request_id 在响应体与响应头中应一致。"""
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/99999999")
+                response = client.get("/groups/99999999", headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 404)
         body_id = response.json().get("request_id")
@@ -83,7 +83,7 @@ class RequestIdIntegrationTests(unittest.TestCase):
         """404 错误响应体应包含 code/message/request_id/timestamp/path。"""
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/99999999")
+                response = client.get("/groups/99999999", headers=self.auth_headers)
 
         body = response.json()
         for field in ("code", "message", "request_id", "timestamp", "path"):

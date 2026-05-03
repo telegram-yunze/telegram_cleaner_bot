@@ -4,6 +4,7 @@ from __future__ import annotations
 # 并通过 get_settings() 提供全局单例，避免重复解析。
 
 from functools import lru_cache
+from secrets import token_urlsafe
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -68,4 +69,37 @@ def get_settings() -> Settings:
     return Settings()
 
 
-__all__ = ["Settings", "get_settings"]
+@lru_cache(maxsize=1)
+def _resolve_runtime_api_secret() -> tuple[str, str]:
+    """解析运行时 API 密钥。
+
+    - 若环境变量/API 配置中有值，则直接使用（source=env）。
+    - 若为空，则为当前进程随机生成一次（source=generated）。
+    """
+
+    configured_secret = get_settings().api_secret_key.strip()
+    if configured_secret:
+        return configured_secret, "env"
+    return token_urlsafe(32), "generated"
+
+
+def get_runtime_api_secret_key() -> str:
+    """获取运行时 API 密钥（进程内稳定）。"""
+
+    secret, _ = _resolve_runtime_api_secret()
+    return secret
+
+
+def get_runtime_api_secret_source() -> str:
+    """获取运行时 API 密钥来源：env 或 generated。"""
+
+    _, source = _resolve_runtime_api_secret()
+    return source
+
+
+__all__ = [
+    "Settings",
+    "get_settings",
+    "get_runtime_api_secret_key",
+    "get_runtime_api_secret_source",
+]

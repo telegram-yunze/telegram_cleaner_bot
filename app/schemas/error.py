@@ -3,11 +3,24 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ErrorResponse(BaseModel):
     """统一错误响应结构。"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "code": "REQUEST_VALIDATION_ERROR",
+                "message": "请求参数校验失败",
+                "request_id": "af6a7f9b0b0d4cb6bd23e9a06e18a3f5",
+                "timestamp": "2026-05-04T08:00:00Z",
+                "path": "/api/rules",
+                "detail": [{"loc": ["body", "code"], "msg": "Field required"}],
+            }
+        }
+    )
 
     code: str = Field(description="业务错误码")
     message: str = Field(description="对外可读的错误说明")

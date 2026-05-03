@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.config import get_runtime_api_secret_key
 from app.deps import get_db
 from app.main import app
 
@@ -30,6 +31,7 @@ class ApiExceptionHandlingTests(unittest.TestCase):
 
     def setUp(self) -> None:
         app.dependency_overrides[get_db] = _override_get_db
+        self.auth_headers = {"X-API-Key": get_runtime_api_secret_key()}
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
@@ -37,7 +39,7 @@ class ApiExceptionHandlingTests(unittest.TestCase):
     def test_not_found_error_response_shape(self) -> None:
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/10086")
+                response = client.get("/groups/10086", headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 404)
         payload = response.json()
@@ -49,7 +51,7 @@ class ApiExceptionHandlingTests(unittest.TestCase):
 
     def test_validation_error_response_shape(self) -> None:
         with TestClient(app) as client:
-            response = client.post("/groups", json={})
+            response = client.post("/groups", json={}, headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 422)
         payload = response.json()
@@ -61,7 +63,7 @@ class ApiExceptionHandlingTests(unittest.TestCase):
     def test_unexpected_error_response_shape(self) -> None:
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceBoom()):
             with TestClient(app, raise_server_exceptions=False) as client:
-                response = client.get("/groups/10010")
+                response = client.get("/groups/10010", headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 500)
         payload = response.json()
