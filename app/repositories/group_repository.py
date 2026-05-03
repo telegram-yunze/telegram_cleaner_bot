@@ -87,6 +87,13 @@ class GroupMessageRepositoryProtocol(Protocol):
 
 	async def CountByGroupIdAndIsDeleted(self, group_id: int, is_deleted: bool) -> int: ...
 
+	async def UpdateHitResultById(
+		self,
+		message_id: int,
+		hit_rule_code: str | None,
+		risk_score: float | None,
+	) -> int: ...
+
 	async def MarkDeletedByGroupIdAndTelegramMessageId(
 		self,
 		group_id: int,
@@ -323,6 +330,23 @@ class GroupMessageRepository(GroupMessageRepositoryProtocol):
 		)
 		count = await self._session.scalar(stmt)
 		return int(count or 0)
+
+	async def UpdateHitResultById(
+		self,
+		message_id: int,
+		hit_rule_code: str | None,
+		risk_score: float | None,
+	) -> int:
+		"""按消息主键回写命中规则与风险分。"""
+
+		stmt = (
+			update(GroupMessage)
+			.where(GroupMessage.id == message_id)
+			.values(hit_rule_code=hit_rule_code, risk_score=risk_score)
+		)
+		result = cast(CursorResult[object], await self._session.execute(stmt))
+		await self._session.flush()
+		return int(result.rowcount or 0)
 
 	async def MarkDeletedByGroupIdAndTelegramMessageId(
 		self,

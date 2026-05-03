@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     webhook_base_url: str = ""
     webhook_path: str = "/webhook/telegram"
     telegram_polling_timeout: int = 30
+    telegram_action_dry_run: bool = True
     # ── 缓存 ─────────────────────────────────────────────────────────────
     # cashews 缓存连接串；"mem://" 表示纯内存，生产可改为 "redis://host:6379"
     cache_url: str = "mem://"
