@@ -6,6 +6,11 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 
 from app.api.router import api_router
+from app.bot.dispatcher import (
+    initialize_telegram_runtime,
+    shutdown_telegram_runtime,
+    start_polling_if_needed,
+)
 from app.cache import setup_cache, cache
 from app.config import (
     get_runtime_api_secret_key,
@@ -34,6 +39,10 @@ OPENAPI_TAGS = [
     {
         "name": "moderation",
         "description": "处置记录接口，负责审核动作记录的创建、查询与状态更新。",
+    },
+    {
+        "name": "webhook",
+        "description": "Telegram Webhook 回调接口，用于接收机器人更新事件。",
     },
 ]
 
@@ -64,10 +73,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             "X-API-Key",
         )
 
+    settings = get_settings()
     await setup_cache()
+    telegram_runtime = await initialize_telegram_runtime(settings)
+    await start_polling_if_needed(settings, telegram_runtime)
     try:
         yield
     finally:
+        await shutdown_telegram_runtime()
         await cache.close()
         await dispose_engine()
 

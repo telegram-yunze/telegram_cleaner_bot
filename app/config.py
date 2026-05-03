@@ -33,8 +33,11 @@ class Settings(BaseSettings):
 
     # ── Telegram Bot ─────────────────────────────────────────────────────────
     telegram_bot_token: str = ""
+    telegram_run_mode: str = "both"
+    webhook_secret_token: str = ""
     webhook_base_url: str = ""
     webhook_path: str = "/webhook/telegram"
+    telegram_polling_timeout: int = 30
     # ── 缓存 ─────────────────────────────────────────────────────────────
     # cashews 缓存连接串；"mem://" 表示纯内存，生产可改为 "redis://host:6379"
     cache_url: str = "mem://"
@@ -52,6 +55,35 @@ class Settings(BaseSettings):
             raise ValueError(f"log_level 只允许 {allowed}，当前值: {v!r}")
         return normalized
 
+    @field_validator("telegram_run_mode")
+    @classmethod
+    def validate_telegram_run_mode(cls, v: str) -> str:
+        """校验 Telegram 运行模式。"""
+
+        allowed = {"webhook", "polling", "both", "disabled"}
+        normalized = v.lower()
+        if normalized not in allowed:
+            raise ValueError(f"telegram_run_mode 只允许 {allowed}，当前值: {v!r}")
+        return normalized
+
+    @field_validator("webhook_path")
+    @classmethod
+    def validate_webhook_path(cls, v: str) -> str:
+        """确保 Webhook 路径以 / 开头。"""
+
+        if not v.startswith("/"):
+            raise ValueError(f"webhook_path 必须以 / 开头，当前值: {v!r}")
+        return v
+
+    @field_validator("telegram_polling_timeout")
+    @classmethod
+    def validate_telegram_polling_timeout(cls, v: int) -> int:
+        """限制轮询超时必须为正整数。"""
+
+        if v <= 0:
+            raise ValueError(f"telegram_polling_timeout 必须大于 0，当前值: {v}")
+        return v
+
     @property
     def webhook_url(self) -> str:
         """组合完整的 Webhook URL。"""
@@ -61,6 +93,12 @@ class Settings(BaseSettings):
     def is_sqlite(self) -> bool:
         """判断当前数据库是否为 SQLite。"""
         return self.database_url.startswith("sqlite")
+
+    @property
+    def has_telegram_bot_token(self) -> bool:
+        """判断是否配置了 Telegram Bot Token。"""
+
+        return bool(self.telegram_bot_token.strip())
 
 
 @lru_cache(maxsize=1)
