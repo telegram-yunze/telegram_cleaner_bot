@@ -6,7 +6,11 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 
 from app.api.router import api_router
+from app.config import get_settings
 from app.db.session import dispose_engine
+from app.exception_handlers import register_exception_handlers
+from app.middleware.request_context import RequestContextMiddleware
+from app.utils.logger import configure_logging
 
 
 @asynccontextmanager
@@ -20,6 +24,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Telegram Cleaner Bot API", version="0.1.0", lifespan=lifespan)
+configure_logging(get_settings().log_level)
+app.add_middleware(RequestContextMiddleware)
+register_exception_handlers(app)
 app.include_router(api_router)
 
 

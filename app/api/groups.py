@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_group_service
+from app.exceptions import ResourceNotFoundError
 from app.schemas.group import GroupCreate, GroupListResponse, GroupQuery, GroupRead, GroupUpdate
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -40,7 +41,7 @@ async def get_group_by_id(
 
     group = await get_group_service(session).FindById(group_id)
     if group is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="群组不存在")
+        raise ResourceNotFoundError(resource="群组")
     return group
 
 
@@ -54,7 +55,7 @@ async def update_group_by_id(
 
     group = await get_group_service(session).UpdateById(group_id, payload)
     if group is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="群组不存在")
+        raise ResourceNotFoundError(resource="群组")
     return group
 
 
@@ -67,5 +68,5 @@ async def delete_group_by_id(
 
     deleted = await get_group_service(session).DeleteById(group_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="群组不存在")
+        raise ResourceNotFoundError(resource="群组")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

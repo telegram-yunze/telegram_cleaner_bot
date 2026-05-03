@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_rule_service
+from app.exceptions import ResourceNotFoundError
 from app.schemas.rule import RuleCreate, RuleListResponse, RuleQuery, RuleRead, RuleUpdate
 
 router = APIRouter(prefix="/rules", tags=["rules"])
@@ -40,7 +41,7 @@ async def get_rule_by_id(
 
     rule = await get_rule_service(session).FindById(rule_id)
     if rule is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="规则不存在")
+        raise ResourceNotFoundError(resource="规则")
     return rule
 
 
@@ -54,7 +55,7 @@ async def update_rule_by_id(
 
     rule = await get_rule_service(session).UpdateById(rule_id, payload)
     if rule is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="规则不存在")
+        raise ResourceNotFoundError(resource="规则")
     return rule
 
 
@@ -67,5 +68,5 @@ async def delete_rule_by_id(
 
     deleted = await get_rule_service(session).DeleteById(rule_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="规则不存在")
+        raise ResourceNotFoundError(resource="规则")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

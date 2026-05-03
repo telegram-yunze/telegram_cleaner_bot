@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
+from app.exceptions import DatabaseOperationError
+from app.utils.logger import get_logger, log_exception
+
+logger = get_logger(__name__)
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -46,8 +51,37 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
     try:
         yield session
         await session.commit()
-    except Exception:
+    except IntegrityError as exc:
         await session.rollback()
+        log_exception(
+            logger,
+            message="数据库约束冲突，事务已回滚",
+            exc=exc,
+        )
+        raise DatabaseOperationError(detail={"reason": "integrity_error"}) from exc
+    except OperationalError as exc:
+        await session.rollback()
+        log_exception(
+            logger,
+            message="数据库连接或执行异常，事务已回滚",
+            exc=exc,
+        )
+        raise DatabaseOperationError(detail={"reason": "operational_error"}) from exc
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        log_exception(
+            logger,
+            message="数据库访问异常，事务已回滚",
+            exc=exc,
+        )
+        raise DatabaseOperationError(detail={"reason": "sqlalchemy_error"}) from exc
+    except Exception as exc:
+        await session.rollback()
+        log_exception(
+            logger,
+            message="请求事务发生未预期异常，事务已回滚",
+            exc=exc,
+        )
         raise
     finally:
         await session.close()

@@ -3,3 +3,7 @@
 **/*.pyc
 .venv/
 __pycache__/
+**/*.db
+**/*.log
+**/*.sqlite
+**/*.sqlite3

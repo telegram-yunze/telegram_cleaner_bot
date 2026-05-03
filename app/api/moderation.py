@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_moderation_service
+from app.exceptions import ResourceNotFoundError
 from app.schemas.moderation import (
     ModerationRecordCreate,
     ModerationRecordListResponse,
@@ -46,7 +47,7 @@ async def get_moderation_record_by_id(
 
     record = await get_moderation_service(session).FindById(moderation_record_id)
     if record is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="审核记录不存在")
+        raise ResourceNotFoundError(resource="审核记录")
     return record
 
 
@@ -60,7 +61,7 @@ async def update_moderation_record_by_id(
 
     record = await get_moderation_service(session).UpdateById(moderation_record_id, payload)
     if record is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="审核记录不存在")
+        raise ResourceNotFoundError(resource="审核记录")
     return record
 
 
@@ -74,5 +75,5 @@ async def update_moderation_record_status(
 
     record = await get_moderation_service(session).UpdateStatusById(moderation_record_id, payload)
     if record is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="审核记录不存在")
+        raise ResourceNotFoundError(resource="审核记录")
     return record
