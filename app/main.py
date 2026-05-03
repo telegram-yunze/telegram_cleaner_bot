@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 
 from app.api.router import api_router
+from app.cache import setup_cache, cache
 from app.config import get_settings
 from app.db.session import dispose_engine
 from app.exception_handlers import register_exception_handlers
@@ -15,11 +16,13 @@ from app.utils.logger import configure_logging
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """管理应用生命周期，关闭时释放数据库连接。"""
+    """管理应用生命周期：启动时初始化缓存，关闭时释放缓存和数据库连接。"""
 
+    await setup_cache()
     try:
         yield
     finally:
+        await cache.close()
         await dispose_engine()
 
 

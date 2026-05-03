@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     webhook_base_url: str = ""
     webhook_path: str = "/webhook/telegram"
-
+    # ── 缓存 ─────────────────────────────────────────────────────────────
+    # cashews 缓存连接串；"mem://" 表示纯内存，生产可改为 "redis://host:6379"
+    cache_url: str = "mem://"
     # ── 安全 ─────────────────────────────────────────────────────────────────
     # API 鉴权密钥；生产必须设置为足够随机的字符串
     api_secret_key: str = ""
