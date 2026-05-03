@@ -75,17 +75,23 @@ class RuleType(StrEnum):
 class ModerationAction(StrEnum):
     """命中规则后可执行的动作。"""
 
-    # 删除消息
+    # 删除消息（不对用户做其他处置）
     DELETE = "delete"
-    # 警告用户
+    # 警告用户（发送提示，不限制操作，累计次数可触发升级惩罚）
     WARN = "warn"
-    # 禁言用户
+    # 临时禁言（限制发言一段时间，时长由规则 options 或群组策略决定）
     MUTE = "mute"
-    # 封禁用户
+    # 永久禁言（revoke 发言权限，不踢出群，仍可阅读消息）
+    PERMANENT_MUTE = "permanent_mute"
+    # 限制权限（仅限发文字或禁止发媒体，粒度比禁言更细，时长可配置）
+    RESTRICT = "restrict"
+    # 踢出群组（可重新加入，不加入黑名单，适用于首次严重违规）
+    KICK = "kick"
+    # 封禁用户（踢出并拉入黑名单，无法通过链接重新加入）
     BAN = "ban"
-    # 进入人工复核
+    # 进入人工复核（暂不自动处置，由管理员手动决定）
     REVIEW = "review"
-    # 忽略不处理
+    # 忽略不处理（命中规则但主动跳过，用于白名单场景）
     IGNORE = "ignore"
 
 
@@ -100,3 +106,16 @@ class ModerationStatus(StrEnum):
     FAILED = "failed"
     # 跳过执行
     SKIPPED = "skipped"
+
+
+class NotificationRecallStatus(StrEnum):
+    """通知消息自动撤回状态。"""
+
+    # 等待撤回执行
+    PENDING = "pending"
+    # 撤回成功
+    SUCCESS = "success"
+    # 撤回失败
+    FAILED = "failed"
+    # 已取消撤回
+    CANCELED = "canceled"

@@ -21,7 +21,18 @@ class PydanticJsonTypeTests(unittest.TestCase):
         column_type = PydanticJsonType(GroupSettings)
 
         from_model = column_type.process_bind_param(GroupSettings(ad_detection_enabled=True), None)
-        self.assertEqual(from_model, {"ad_detection_enabled": True, "auto_delete_enabled": None, "mute_duration_seconds": None})
+        self.assertEqual(
+            from_model,
+            {
+                "ad_detection_enabled": True,
+                "auto_delete_enabled": None,
+                "mute_duration_seconds": None,
+                "punishment_policy": None,
+                "notify_enabled": None,
+                "notify_auto_recall": None,
+                "notify_recall_delay_seconds": 5,
+            },
+        )
 
         from_mapping = column_type.process_bind_param({"auto_delete_enabled": False}, None)
         self.assertEqual(from_mapping, {"auto_delete_enabled": False})
@@ -43,6 +54,19 @@ class PydanticJsonTypeTests(unittest.TestCase):
 
         parsed_none = column_type.process_result_value(None, None)
         self.assertIsNone(parsed_none)
+
+    def test_group_settings_notify_recall_delay_defaults_and_clamp(self) -> None:
+        default_settings = GroupSettings()
+        self.assertEqual(default_settings.notify_recall_delay_seconds, 5)
+
+        none_settings = GroupSettings(notify_recall_delay_seconds=None)
+        self.assertEqual(none_settings.notify_recall_delay_seconds, 5)
+
+        too_small_settings = GroupSettings(notify_recall_delay_seconds=3)
+        self.assertEqual(too_small_settings.notify_recall_delay_seconds, 5)
+
+        normal_settings = GroupSettings(notify_recall_delay_seconds=10)
+        self.assertEqual(normal_settings.notify_recall_delay_seconds, 10)
 
 
 class SchemaJsonStructTests(unittest.TestCase):

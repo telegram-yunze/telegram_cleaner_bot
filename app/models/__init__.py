@@ -5,6 +5,7 @@ from app.models.enums import (
     MessageType,
     ModerationAction,
     ModerationStatus,
+    NotificationRecallStatus,
     RuleType,
 )
 from app.models.group import Group
@@ -16,10 +17,12 @@ from app.models.json_types import (
     GroupUserProfileExtra,
     MessageContentExtra,
     ModerationResultDetail,
+    PunishmentPolicy,
     RuleOptions,
     TelegramRawPayload,
 )
 from app.models.moderation_record import ModerationRecord
+from app.models.notification_recall_record import NotificationRecallRecord
 from app.models.rule import Rule
 
 __all__ = [
@@ -29,6 +32,7 @@ __all__ = [
     "GroupUserStatus",
     "GroupSettings",
     "BotPermissions",
+    "PunishmentPolicy",
     "RuleOptions",
     "ModerationResultDetail",
     "GroupUserProfileExtra",
@@ -39,7 +43,9 @@ __all__ = [
     "MessageType",
     "ModerationAction",
     "ModerationStatus",
+    "NotificationRecallStatus",
     "ModerationRecord",
+    "NotificationRecallRecord",
     "Rule",
     "RuleType",
 ]

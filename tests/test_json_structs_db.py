@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.base import Base
-from app.models.enums import GroupChatType, MessageType, ModerationAction, ModerationStatus, RuleType
+from app.models.enums import GroupChatType, MessageType, ModerationAction, ModerationStatus, NotificationRecallStatus, RuleType
 from app.models.group import Group
 from app.models.group_message import GroupMessage
 from app.models.group_user import GroupUser
@@ -21,6 +21,7 @@ from app.models.json_types import (
     TelegramRawPayload,
 )
 from app.models.moderation_record import ModerationRecord
+from app.models.notification_recall_record import NotificationRecallRecord
 from app.models.rule import Rule
 
 
@@ -70,6 +71,7 @@ class JsonStructDatabaseRoundtripTests(unittest.IsolatedAsyncioTestCase):
             await self._insert_group_user(session)
             await self._insert_group_message(session)
             await self._insert_moderation_record(session)
+            await self._insert_notification_recall_record(session)
             await session.commit()
 
             rule = (await session.execute(select(Rule).where(Rule.id == 1))).scalar_one()
@@ -94,6 +96,10 @@ class JsonStructDatabaseRoundtripTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(moderation.result_detail, ModerationResultDetail)
             assert moderation.result_detail is not None
             self.assertTrue(moderation.result_detail.success)
+
+            recall_record = (await session.execute(select(NotificationRecallRecord).where(NotificationRecallRecord.id == 1))).scalar_one()
+            self.assertEqual(recall_record.recall_after_seconds, 5)
+            self.assertEqual(recall_record.status, NotificationRecallStatus.PENDING)
 
     @staticmethod
     async def _insert_group(session: AsyncSession) -> None:
@@ -160,6 +166,19 @@ class JsonStructDatabaseRoundtripTests(unittest.IsolatedAsyncioTestCase):
                 action=ModerationAction.WARN,
                 status=ModerationStatus.SUCCESS,
                 result_detail=ModerationResultDetail(success=True, provider="telegram"),
+            )
+        )
+
+    @staticmethod
+    async def _insert_notification_recall_record(session: AsyncSession) -> None:
+        session.add(
+            NotificationRecallRecord(
+                id=1,
+                group_id=1,
+                moderation_record_id=1,
+                chat_id=10001,
+                notification_message_id=90001,
+                scheduled_recall_at=datetime.now(timezone.utc),
             )
         )
 

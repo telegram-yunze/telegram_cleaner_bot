@@ -3,12 +3,28 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SQLEnum, Float, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum as SQLEnum,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 from app.models.enums import MessageType
-from app.models.json_types import MessageContentExtra, PydanticJsonType, TelegramRawPayload
+from app.models.json_types import (
+    MessageContentExtra,
+    PydanticJsonType,
+    TelegramRawPayload,
+)
 
 if TYPE_CHECKING:
     from app.models.group import Group
@@ -21,7 +37,9 @@ class GroupMessage(Base, TimestampMixin):
 
     __tablename__ = "group_messages"
     __table_args__ = (
-        UniqueConstraint("group_id", "telegram_message_id", name="uq_group_messages_group_msg"),
+        UniqueConstraint(
+            "group_id", "telegram_message_id", name="uq_group_messages_group_msg"
+        ),
         Index("ix_group_messages_group_sent_at", "group_id", "sent_at"),
         Index("ix_group_messages_group_deleted", "group_id", "is_deleted"),
         CheckConstraint(
@@ -30,7 +48,9 @@ class GroupMessage(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键 ID")
+    id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True, comment="主键 ID"
+    )
     group_id: Mapped[int] = mapped_column(
         ForeignKey("groups.id", ondelete="CASCADE"),
         nullable=False,
@@ -69,7 +89,9 @@ class GroupMessage(Base, TimestampMixin):
         server_default=MessageType.TEXT.value,
         comment="消息类型",
     )
-    content_text: Mapped[str | None] = mapped_column(Text, nullable=True, comment="文本内容")
+    content_text: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="文本内容"
+    )
     content_extra: Mapped[MessageContentExtra | None] = mapped_column(
         PydanticJsonType(MessageContentExtra),
         nullable=True,
@@ -80,7 +102,9 @@ class GroupMessage(Base, TimestampMixin):
         nullable=True,
         comment="Telegram 原始更新片段",
     )
-    risk_score: Mapped[float | None] = mapped_column(Float, nullable=True, comment="广告风险分")
+    risk_score: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="广告风险分"
+    )
     hit_rule_code: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
@@ -93,7 +117,9 @@ class GroupMessage(Base, TimestampMixin):
         server_default="0",
         comment="是否已删除",
     )
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="删除时间")
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, comment="删除时间"
+    )
     sent_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
@@ -102,4 +128,6 @@ class GroupMessage(Base, TimestampMixin):
 
     group: Mapped["Group"] = relationship(back_populates="messages")
     sender: Mapped["GroupUser | None"] = relationship(back_populates="messages")
-    moderation_records: Mapped[list["ModerationRecord"]] = relationship(back_populates="message")
+    moderation_records: Mapped[list["ModerationRecord"]] = relationship(
+        back_populates="message"
+    )
