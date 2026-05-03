@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import GroupChatType
+from app.models.json_types import BotPermissions, GroupSettings
 
 
 class GroupSchemaBase(BaseModel):
@@ -19,7 +19,8 @@ class GroupSchemaBase(BaseModel):
 	description: str | None = Field(default=None, description="群组描述")
 	owner_telegram_user_id: int | None = Field(default=None, description="群主 Telegram 用户 ID")
 	is_active: bool = Field(default=True, description="是否启用清理")
-	settings: dict[str, Any] | None = Field(default=None, description="群组维度配置")
+	settings: GroupSettings | None = Field(default=None, description="群组维度配置")
+	bot_permissions: BotPermissions | None = Field(default=None, description="机器人在群里的权限配置")
 
 
 class GroupCreate(GroupSchemaBase):
@@ -39,7 +40,8 @@ class GroupUpdate(BaseModel):
 	description: str | None = Field(default=None, description="群组描述")
 	owner_telegram_user_id: int | None = Field(default=None, description="群主 Telegram 用户 ID")
 	is_active: bool | None = Field(default=None, description="是否启用清理")
-	settings: dict[str, Any] | None = Field(default=None, description="群组维度配置")
+	settings: GroupSettings | None = Field(default=None, description="群组维度配置")
+	bot_permissions: BotPermissions | None = Field(default=None, description="机器人在群里的权限配置")
 
 
 class GroupRead(GroupSchemaBase):

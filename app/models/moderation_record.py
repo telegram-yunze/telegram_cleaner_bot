@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Enum as SQLEnum, ForeignKey, Index, JSON, String, Text
+from sqlalchemy import BigInteger, Enum as SQLEnum, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 from app.models.enums import ModerationAction, ModerationStatus
+from app.models.json_types import ModerationResultDetail, PydanticJsonType
 
 if TYPE_CHECKING:
 	from app.models.group import Group
@@ -70,8 +71,8 @@ class ModerationRecord(Base, TimestampMixin):
 		comment="执行状态",
 	)
 	reason: Mapped[str | None] = mapped_column(Text, nullable=True, comment="处置原因")
-	result_detail: Mapped[dict[str, Any] | None] = mapped_column(
-		JSON,
+	result_detail: Mapped[ModerationResultDetail | None] = mapped_column(
+		PydanticJsonType(ModerationResultDetail),
 		nullable=True,
 		comment="执行结果和补充细节",
 	)

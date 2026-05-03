@@ -8,6 +8,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import ModerationStatus
+from app.models.json_types import ModerationResultDetail
 from app.models.moderation_record import ModerationRecord
 
 
@@ -49,7 +50,7 @@ class ModerationRepositoryProtocol(Protocol):
 		self,
 		moderation_record_id: int,
 		status: ModerationStatus,
-		result_detail: dict[str, Any] | None = None,
+		result_detail: ModerationResultDetail | None = None,
 	) -> int: ...
 
 
@@ -157,7 +158,7 @@ class ModerationRepository(ModerationRepositoryProtocol):
 		self,
 		moderation_record_id: int,
 		status: ModerationStatus,
-		result_detail: dict[str, Any] | None = None,
+		result_detail: ModerationResultDetail | None = None,
 	) -> int:
 		"""更新处置记录执行状态，并可选覆盖执行结果细节。"""
 

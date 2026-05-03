@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SQLEnum, ForeignKey, JSON, Index, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SQLEnum, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 from app.models.enums import GroupUserRole, GroupUserStatus
+from app.models.json_types import GroupUserProfileExtra, PydanticJsonType
 
 if TYPE_CHECKING:
     from app.models.group import Group
@@ -90,8 +91,8 @@ class GroupUser(Base, TimestampMixin):
     )
     joined_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="入群时间")
     left_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="离群时间")
-    profile_extra: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+    profile_extra: Mapped[GroupUserProfileExtra | None] = mapped_column(
+        PydanticJsonType(GroupUserProfileExtra),
         nullable=True,
         comment="补充资料",
     )

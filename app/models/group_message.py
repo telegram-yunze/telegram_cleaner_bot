@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SQLEnum, Float, ForeignKey, Index, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SQLEnum, Float, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 from app.models.enums import MessageType
+from app.models.json_types import MessageContentExtra, PydanticJsonType, TelegramRawPayload
 
 if TYPE_CHECKING:
     from app.models.group import Group
@@ -69,13 +70,13 @@ class GroupMessage(Base, TimestampMixin):
         comment="消息类型",
     )
     content_text: Mapped[str | None] = mapped_column(Text, nullable=True, comment="文本内容")
-    content_extra: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+    content_extra: Mapped[MessageContentExtra | None] = mapped_column(
+        PydanticJsonType(MessageContentExtra),
         nullable=True,
         comment="媒体、链接、按钮等补充内容",
     )
-    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+    raw_payload: Mapped[TelegramRawPayload | None] = mapped_column(
+        PydanticJsonType(TelegramRawPayload),
         nullable=True,
         comment="Telegram 原始更新片段",
     )

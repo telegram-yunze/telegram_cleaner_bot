@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum as SQLEnum, JSON, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum as SQLEnum, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 from app.models.enums import GroupChatType
+from app.models.json_types import BotPermissions, GroupSettings, PydanticJsonType
 
 if TYPE_CHECKING:
 	from app.models.group_message import GroupMessage
@@ -61,10 +62,15 @@ class Group(Base, TimestampMixin):
 		server_default="1",
 		comment="是否启用清理",
 	)
-	settings: Mapped[dict[str, Any] | None] = mapped_column(
-		JSON,
+	settings: Mapped[GroupSettings | None] = mapped_column(
+		PydanticJsonType(GroupSettings),
 		nullable=True,
 		comment="群组维度的检测和处置配置",
+	)
+	bot_permissions: Mapped[BotPermissions | None] = mapped_column(
+		PydanticJsonType(BotPermissions),
+		nullable=True,
+		comment="机器人在群里的权限配置",
 	)
 	last_message_at: Mapped[datetime | None] = mapped_column(
 		DateTime,

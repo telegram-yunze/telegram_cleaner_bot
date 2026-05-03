@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import ModerationAction, ModerationStatus
+from app.models.json_types import ModerationResultDetail
 
 
 class ModerationRecordSchemaBase(BaseModel):
@@ -16,7 +16,7 @@ class ModerationRecordSchemaBase(BaseModel):
 	action: ModerationAction = Field(..., description="执行动作")
 	status: ModerationStatus = Field(default=ModerationStatus.PENDING, description="执行状态")
 	reason: str | None = Field(default=None, description="处置原因")
-	result_detail: dict[str, Any] | None = Field(default=None, description="执行结果详情")
+	result_detail: ModerationResultDetail | None = Field(default=None, description="执行结果详情")
 
 
 class ModerationRecordCreate(ModerationRecordSchemaBase):
@@ -36,7 +36,7 @@ class ModerationRecordUpdate(BaseModel):
 	action: ModerationAction | None = Field(default=None, description="执行动作")
 	status: ModerationStatus | None = Field(default=None, description="执行状态")
 	reason: str | None = Field(default=None, description="处置原因")
-	result_detail: dict[str, Any] | None = Field(default=None, description="执行结果详情")
+	result_detail: ModerationResultDetail | None = Field(default=None, description="执行结果详情")
 
 
 class ModerationRecordRead(ModerationRecordSchemaBase):

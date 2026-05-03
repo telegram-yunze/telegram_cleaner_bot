@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Enum as SQLEnum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Enum as SQLEnum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 from app.models.enums import ModerationAction, RuleType
+from app.models.json_types import PydanticJsonType, RuleOptions
 
 if TYPE_CHECKING:
 	from app.models.group import Group
@@ -64,7 +65,11 @@ class Rule(Base, TimestampMixin):
 		server_default="1",
 		comment="是否启用",
 	)
-	options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, comment="规则额外配置")
+	options: Mapped[RuleOptions | None] = mapped_column(
+		PydanticJsonType(RuleOptions),
+		nullable=True,
+		comment="规则额外配置",
+	)
 
 	group: Mapped["Group"] = relationship(back_populates="rules")
 	moderation_records: Mapped[list["ModerationRecord"]] = relationship(back_populates="rule")

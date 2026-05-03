@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import ModerationAction, RuleType
+from app.models.json_types import RuleOptions
 
 
 class RuleSchemaBase(BaseModel):
@@ -20,7 +20,7 @@ class RuleSchemaBase(BaseModel):
 	action: ModerationAction = Field(default=ModerationAction.DELETE, description="命中后动作")
 	priority: int = Field(default=100, ge=0, description="优先级")
 	is_enabled: bool = Field(default=True, description="是否启用")
-	options: dict[str, Any] | None = Field(default=None, description="规则扩展配置")
+	options: RuleOptions | None = Field(default=None, description="规则扩展配置")
 
 
 class RuleCreate(RuleSchemaBase):
@@ -41,7 +41,7 @@ class RuleUpdate(BaseModel):
 	action: ModerationAction | None = Field(default=None, description="命中后动作")
 	priority: int | None = Field(default=None, ge=0, description="优先级")
 	is_enabled: bool | None = Field(default=None, description="是否启用")
-	options: dict[str, Any] | None = Field(default=None, description="规则扩展配置")
+	options: RuleOptions | None = Field(default=None, description="规则扩展配置")
 
 
 class RuleRead(RuleSchemaBase):
