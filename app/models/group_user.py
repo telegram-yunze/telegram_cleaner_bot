@@ -122,6 +122,18 @@ class GroupUser(Base, TimestampMixin):
         nullable=True,
         comment="补充资料",
     )
+    profile_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="上次从 Telegram 同步用户资料的时间",
+    )
+    is_deactivated: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+        comment="是否已注销账号；Telegram 封禁用户后其账号会变为已注销状态",
+    )
     # ---- 惩罚追踪字段 ----
     warn_count: Mapped[int] = mapped_column(
         Integer,

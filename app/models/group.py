@@ -82,6 +82,18 @@ class Group(Base, TimestampMixin):
         nullable=True,
         comment="最近一条消息时间",
     )
+    is_authorized: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+        comment="是否已授权使用机器人",
+    )
+    info_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="上次从 Telegram 同步群组信息的时间",
+    )
 
     users: Mapped[list["GroupUser"]] = relationship(
         back_populates="group",

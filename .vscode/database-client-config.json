@@ -1,0 +1,36 @@
+{
+    "database": {
+        "1777847205696": {
+            "host": "127.0.0.1",
+            "port": 3306,
+            "dbType": "SQLite",
+            "name": "telegram_cleaner_bot",
+            "advance": {
+                "idleConfig": {
+                    "enable": true
+                },
+                "hideSystemSchema": true,
+                "groupingTables": false,
+                "loadMetaDataWhenExpandTreeView": true
+            },
+            "treeFeatures": [],
+            "usingSSH": false,
+            "useSocksProxy": false,
+            "useHTTPProxy": false,
+            "global": false,
+            "remark": "Dev",
+            "savePassword": "Forever",
+            "readonly": false,
+            "sort": 13,
+            "useSSL": false,
+            "dbPath": "d:\\DevelopOrgs\\telegram-yunze\\telegram_cleaner_bot\\telegram_cleaner_bot.db",
+            "fs": {
+                "encoding": "utf8",
+                "showHidden": true
+            },
+            "key": "1777847205696",
+            "connectionKey": "database.connections"
+        }
+    },
+    "$schema": "https://cdn.database-client.com/dbclient/schema.json"
+}
