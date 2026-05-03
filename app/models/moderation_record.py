@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, ForeignKey, JSON, String, Text
+from sqlalchemy import BigInteger, Enum as SQLEnum, ForeignKey, Index, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
+from app.models.enums import ModerationAction, ModerationStatus
 
 if TYPE_CHECKING:
 	from app.models.group import Group
@@ -18,6 +19,9 @@ class ModerationRecord(Base, TimestampMixin):
 	"""审核处置记录表，保存命中规则后的执行结果。"""
 
 	__tablename__ = "moderation_records"
+	__table_args__ = (
+		Index("ix_moderation_records_group_status", "group_id", "status"),
+	)
 
 	id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键 ID")
 	group_id: Mapped[int] = mapped_column(
@@ -41,12 +45,28 @@ class ModerationRecord(Base, TimestampMixin):
 		nullable=True,
 		comment="命中规则主键",
 	)
-	action: Mapped[str] = mapped_column(String(32), nullable=False, comment="执行动作")
-	status: Mapped[str] = mapped_column(
-		String(32),
+	action: Mapped[ModerationAction] = mapped_column(
+		SQLEnum(
+			ModerationAction,
+			name="enum_moderation_action",
+			native_enum=False,
+			validate_strings=True,
+			create_constraint=True,
+		),
 		nullable=False,
-		default="pending",
-		server_default="pending",
+		comment="执行动作",
+	)
+	status: Mapped[ModerationStatus] = mapped_column(
+		SQLEnum(
+			ModerationStatus,
+			name="enum_moderation_status",
+			native_enum=False,
+			validate_strings=True,
+			create_constraint=True,
+		),
+		nullable=False,
+		default=ModerationStatus.PENDING,
+		server_default=ModerationStatus.PENDING.value,
 		comment="执行状态",
 	)
 	reason: Mapped[str | None] = mapped_column(Text, nullable=True, comment="处置原因")

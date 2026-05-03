@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, JSON, Index, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SQLEnum, ForeignKey, JSON, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
+from app.models.enums import GroupUserRole, GroupUserStatus
 
 if TYPE_CHECKING:
     from app.models.group import Group
@@ -22,6 +23,10 @@ class GroupUser(Base, TimestampMixin):
         UniqueConstraint("group_id", "telegram_user_id", name="uq_group_users_group_user"),
         Index("ix_group_users_group_role", "group_id", "role"),
         Index("ix_group_users_group_status", "group_id", "status"),
+        CheckConstraint(
+            "left_at IS NULL OR joined_at IS NULL OR left_at >= joined_at",
+            name="ck_group_users_left_after_joined",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键 ID")
@@ -43,18 +48,30 @@ class GroupUser(Base, TimestampMixin):
         nullable=True,
         comment="语言代码",
     )
-    role: Mapped[str] = mapped_column(
-        String(32),
+    role: Mapped[GroupUserRole] = mapped_column(
+        SQLEnum(
+            GroupUserRole,
+            name="enum_group_user_role",
+            native_enum=False,
+            validate_strings=True,
+            create_constraint=True,
+        ),
         nullable=False,
-        default="member",
-        server_default="member",
+        default=GroupUserRole.MEMBER,
+        server_default=GroupUserRole.MEMBER.value,
         comment="群内角色",
     )
-    status: Mapped[str] = mapped_column(
-        String(32),
+    status: Mapped[GroupUserStatus] = mapped_column(
+        SQLEnum(
+            GroupUserStatus,
+            name="enum_group_user_status",
+            native_enum=False,
+            validate_strings=True,
+            create_constraint=True,
+        ),
         nullable=False,
-        default="active",
-        server_default="active",
+        default=GroupUserStatus.ACTIVE,
+        server_default=GroupUserStatus.ACTIVE.value,
         comment="成员状态",
     )
     is_bot: Mapped[bool] = mapped_column(

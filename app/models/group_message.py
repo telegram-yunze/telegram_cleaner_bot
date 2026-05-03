@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Enum as SQLEnum, Float, ForeignKey, Index, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
+from app.models.enums import MessageType
 
 if TYPE_CHECKING:
     from app.models.group import Group
@@ -22,6 +23,10 @@ class GroupMessage(Base, TimestampMixin):
         UniqueConstraint("group_id", "telegram_message_id", name="uq_group_messages_group_msg"),
         Index("ix_group_messages_group_sent_at", "group_id", "sent_at"),
         Index("ix_group_messages_group_deleted", "group_id", "is_deleted"),
+        CheckConstraint(
+            "risk_score IS NULL OR (risk_score >= 0 AND risk_score <= 1)",
+            name="ck_group_messages_risk_score_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="主键 ID")
@@ -50,11 +55,17 @@ class GroupMessage(Base, TimestampMixin):
         nullable=True,
         comment="被回复消息 ID",
     )
-    message_type: Mapped[str] = mapped_column(
-        String(32),
+    message_type: Mapped[MessageType] = mapped_column(
+        SQLEnum(
+            MessageType,
+            name="enum_group_message_type",
+            native_enum=False,
+            validate_strings=True,
+            create_constraint=True,
+        ),
         nullable=False,
-        default="text",
-        server_default="text",
+        default=MessageType.TEXT,
+        server_default=MessageType.TEXT.value,
         comment="消息类型",
     )
     content_text: Mapped[str | None] = mapped_column(Text, nullable=True, comment="文本内容")

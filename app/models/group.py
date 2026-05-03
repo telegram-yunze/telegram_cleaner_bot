@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, JSON, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum as SQLEnum, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
+from app.models.enums import GroupChatType
 
 if TYPE_CHECKING:
 	from app.models.group_message import GroupMessage
@@ -34,11 +35,17 @@ class Group(Base, TimestampMixin):
 		nullable=True,
 		comment="群组公开用户名",
 	)
-	chat_type: Mapped[str] = mapped_column(
-		String(32),
+	chat_type: Mapped[GroupChatType] = mapped_column(
+		SQLEnum(
+			GroupChatType,
+			name="enum_group_chat_type",
+			native_enum=False,
+			validate_strings=True,
+			create_constraint=True,
+		),
 		nullable=False,
-		default="supergroup",
-		server_default="supergroup",
+		default=GroupChatType.SUPERGROUP,
+		server_default=GroupChatType.SUPERGROUP.value,
 		comment="群组类型",
 	)
 	description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="群组描述")
