@@ -22,12 +22,28 @@ async def _sync_single_group_info(bot: Bot, repository: GroupRepository, group_i
     title: str | None = None
     username: str | None = None
     description: str | None = None
+    owner_telegram_user_id: int | None = None
 
     try:
         chat = await bot.get_chat(telegram_group_id)
         title = (chat.title or "").strip() or None
         username = (chat.username or "").strip() or None
         description = (getattr(chat, "description", None) or "").strip() or None
+
+        try:
+            administrators = await bot.get_chat_administrators(telegram_group_id)
+            for admin in administrators:
+                if str(getattr(admin, "status", "")) == "creator":
+                    owner_telegram_user_id = int(admin.user.id)
+                    break
+        except Exception as exc:
+            logger.warning(
+                "群主查询失败，跳过 owner_telegram_user_id 更新: group_id=%s telegram_group_id=%s error=%s",
+                group_id,
+                telegram_group_id,
+                str(exc),
+            )
+
         logger.info(
             "群组信息拉取成功: group_id=%s telegram_group_id=%s",
             group_id,
@@ -47,6 +63,7 @@ async def _sync_single_group_info(bot: Bot, repository: GroupRepository, group_i
         username=username,
         description=description,
         info_updated_at=now,
+        owner_telegram_user_id=owner_telegram_user_id,
     )
 
 

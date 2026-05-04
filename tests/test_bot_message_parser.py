@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.models.enums import MessageType
+from app.models.enums import GroupUserRole, MessageType
 from app.services.bot_message_parser import BotMessageParserService
 
 
@@ -24,6 +25,7 @@ class _FakeGroupUserRepository:
         self.saved_entity = None
         self.updated_profile = None
         self.updated_profile_extra = None
+        self.updated_role = None
 
     async def FindByGroupIdAndTelegramUserId(self, group_id: int, telegram_user_id: int):
         return self._group_user
@@ -53,6 +55,7 @@ class _FakeGroupUserRepository:
         is_bot: bool,
         is_deactivated: bool,
         profile_updated_at: datetime,
+        role=None,
     ):
         self.updated_profile = {
             "group_id": group_id,
@@ -64,7 +67,9 @@ class _FakeGroupUserRepository:
             "is_bot": is_bot,
             "is_deactivated": is_deactivated,
             "profile_updated_at": profile_updated_at,
+            "role": role,
         }
+        self.updated_role = role
         if self._group_user is not None:
             self._group_user.username = username
             self._group_user.first_name = first_name
@@ -309,6 +314,112 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(context.sender_id)
         self.assertIsNotNone(user_repo.saved_entity)
         self.assertIsNotNone(user_repo.saved_entity.profile_updated_at)
+
+
+    async def test_parse_and_save_admin_user_refreshes_role_to_admin(self) -> None:
+        group_repo = _FakeGroupRepository()
+        msg_repo = _FakeGroupMessageRepository()
+        user_repo = _FakeGroupUserRepository(group_user=None)
+        service = BotMessageParserService(
+            group_repository=group_repo,
+            group_user_repository=user_repo,
+            group_message_repository=msg_repo,
+            group_auto_register_service=_FakeGroupAutoRegisterService(
+                group=SimpleNamespace(id=11, telegram_group_id=-1003, is_authorized=True)
+            ),
+        )
+
+        refreshed_user_repo = _FakeGroupUserRepository(
+            group_user=SimpleNamespace(
+                id=2233,
+                group_id=11,
+                telegram_user_id=9002,
+                username='bob',
+                first_name='Bob',
+                last_name='Admin',
+                language_code='en',
+                is_bot=False,
+                is_deactivated=False,
+                profile_extra=None,
+                status=SimpleNamespace(value='active'),
+                profile_updated_at=datetime.now(timezone.utc),
+            )
+        )
+
+        group_entity = SimpleNamespace(id=11, telegram_group_id=-1003)
+        mock_bot = AsyncMock()
+        mock_bot.get_chat_member = AsyncMock(return_value=SimpleNamespace(status='administrator'))
+        mock_bot.get_chat = AsyncMock(return_value=SimpleNamespace(bio=None))
+
+        message = SimpleNamespace(
+            chat=SimpleNamespace(id=-1003, type='supergroup'),
+            message_id=103,
+            from_user=SimpleNamespace(
+                id=9002,
+                username='bob',
+                first_name='Bob',
+                last_name='Admin',
+                language_code='en',
+                is_bot=False,
+            ),
+            bot=mock_bot,
+            text='admin speaking',
+            caption=None,
+            photo=None,
+            video=None,
+            document=None,
+            sticker=None,
+            forward_origin=None,
+            reply_to_message=None,
+            date=datetime.now(timezone.utc),
+            model_dump=lambda exclude_none=True: {'message_id': 103},
+        )
+
+        scheduled = []
+
+        def _capture_create_task(coro):
+            scheduled.append(coro)
+            return SimpleNamespace(done=lambda: False)
+
+        async def _fake_get_db_session():
+            yield object()
+
+        with patch(
+            'app.services.bot_message_parser.get_group_access_cache',
+            new=AsyncMock(return_value={'group_id': 11, 'is_authorized': True}),
+        ), patch(
+            'app.services.bot_message_parser.get_group_user_cache',
+            new=AsyncMock(return_value=None),
+        ), patch(
+            'app.services.bot_message_parser.set_group_user_cache_found',
+            new=AsyncMock(),
+        ), patch(
+            'app.services.bot_message_parser.set_group_user_cache_missing',
+            new=AsyncMock(),
+        ), patch(
+            'app.services.bot_message_parser.try_acquire_group_user_profile_refresh_suppress',
+            new=AsyncMock(return_value=True),
+        ), patch(
+            'app.services.bot_message_parser.asyncio.create_task',
+            side_effect=_capture_create_task,
+        ), patch(
+            'app.services.bot_message_parser.get_db_session',
+            new=_fake_get_db_session,
+        ), patch(
+            'app.services.bot_message_parser.GroupUserRepository',
+            return_value=refreshed_user_repo,
+        ), patch(
+            'app.services.bot_message_parser.GroupRepository',
+            return_value=SimpleNamespace(FindById=AsyncMock(return_value=group_entity)),
+        ):
+            context = await service.ParseAndSave(message)
+            self.assertFalse(context.should_skip)
+            self.assertEqual(user_repo.saved_entity.role, GroupUserRole.MEMBER)
+            self.assertEqual(len(scheduled), 1)
+            await scheduled[0]
+
+        self.assertEqual(refreshed_user_repo.updated_role, GroupUserRole.ADMIN)
+        mock_bot.get_chat_member.assert_called_once_with(-1003, 9002)
 
 
 if __name__ == "__main__":

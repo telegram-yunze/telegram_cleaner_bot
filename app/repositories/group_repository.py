@@ -8,7 +8,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import GroupUserStatus
+from app.models.enums import GroupUserRole, GroupUserStatus
 from app.models.group import Group
 from app.models.group_message import GroupMessage
 from app.models.group_user import GroupUser
@@ -45,6 +45,8 @@ class GroupRepositoryProtocol(Protocol):
 		username: str | None,
 		description: str | None,
 		info_updated_at: datetime,
+		*,
+		owner_telegram_user_id: int | None = None,
 	) -> int: ...
 
 	async def DeleteById(self, group_id: int) -> bool: ...
@@ -88,6 +90,7 @@ class GroupUserRepositoryProtocol(Protocol):
 		is_bot: bool,
 		is_deactivated: bool,
 		profile_updated_at: datetime,
+		role: GroupUserRole | None = None,
 	) -> int: ...
 
 	async def UpdateProfileExtraByGroupIdAndTelegramUserId(
@@ -219,6 +222,8 @@ class GroupRepository(GroupRepositoryProtocol):
 		username: str | None,
 		description: str | None,
 		info_updated_at: datetime,
+		*,
+		owner_telegram_user_id: int | None = None,
 	) -> int:
 		"""按主键更新群组资料字段，并刷新信息更新时间。"""
 
@@ -231,6 +236,8 @@ class GroupRepository(GroupRepositoryProtocol):
 			values["username"] = username
 		if description is not None:
 			values["description"] = description
+		if owner_telegram_user_id is not None:
+			values["owner_telegram_user_id"] = owner_telegram_user_id
 
 		stmt = update(Group).where(Group.id == group_id).values(**values)
 		result = cast(CursorResult[object], await self._session.execute(stmt))
@@ -338,21 +345,26 @@ class GroupUserRepository(GroupUserRepositoryProtocol):
 		is_bot: bool,
 		is_deactivated: bool,
 		profile_updated_at: datetime,
+		role: GroupUserRole | None = None,
 	) -> int:
 		"""按群组和用户更新基础资料，并刷新资料同步时间。"""
+
+		values: dict[str, object] = {
+			"username": username,
+			"first_name": first_name,
+			"last_name": last_name,
+			"language_code": language_code,
+			"is_bot": is_bot,
+			"is_deactivated": is_deactivated,
+			"profile_updated_at": profile_updated_at,
+		}
+		if role is not None:
+			values["role"] = role
 
 		stmt = (
 			update(GroupUser)
 			.where(GroupUser.group_id == group_id, GroupUser.telegram_user_id == telegram_user_id)
-			.values(
-				username=username,
-				first_name=first_name,
-				last_name=last_name,
-				language_code=language_code,
-				is_bot=is_bot,
-				is_deactivated=is_deactivated,
-				profile_updated_at=profile_updated_at,
-			)
+			.values(**values)
 		)
 		result = cast(CursorResult[object], await self._session.execute(stmt))
 		await self._session.flush()

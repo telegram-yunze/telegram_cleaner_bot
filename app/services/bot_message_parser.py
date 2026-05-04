@@ -21,6 +21,7 @@ from app.models.group_message import GroupMessage
 from app.models.group_user import GroupUser
 from app.models.json_types import GroupUserProfileExtra, MessageContentExtra, TelegramRawPayload
 from app.repositories.group_repository import (
+    GroupRepository,
     GroupUserRepository,
     GroupMessageRepositoryProtocol,
     GroupRepositoryProtocol,
@@ -210,6 +211,13 @@ class BotMessageParserService:
             group_user = await self._create_group_user_from_message_sender(group_id=group_id, message=message)
             if group_user is None:
                 return None, telegram_user_id
+            if getattr(message, "bot", None) is not None:
+                await self._schedule_group_user_profile_refresh(
+                    group_id=group_id,
+                    group_user_id=group_user.id,
+                    telegram_user_id=telegram_user_id,
+                    message=message,
+                )
             return group_user.id, telegram_user_id
 
         group_user = await self._group_user_repository.FindByGroupIdAndTelegramUserId(group_id, telegram_user_id)
@@ -225,6 +233,13 @@ class BotMessageParserService:
             )
             if created_group_user is None:
                 return None, telegram_user_id
+            if getattr(message, "bot", None) is not None:
+                await self._schedule_group_user_profile_refresh(
+                    group_id=group_id,
+                    group_user_id=created_group_user.id,
+                    telegram_user_id=telegram_user_id,
+                    message=message,
+                )
             return created_group_user.id, telegram_user_id
 
         await self._cache_group_user_snapshot(group_user)
@@ -330,6 +345,22 @@ class BotMessageParserService:
                     return
 
                 now = self._now_utc_naive()
+                role: GroupUserRole | None = None
+                if bot is not None:
+                    group_repository = GroupRepository(session)
+                    group_entity = await group_repository.FindById(group_id)
+                    if group_entity is not None:
+                        try:
+                            member = await bot.get_chat_member(group_entity.telegram_group_id, telegram_user_id)
+                            role = self._map_chat_member_status_to_role(str(getattr(member, "status", "")))
+                        except Exception as exc:
+                            logger.warning(
+                                "群成员角色查询失败，保持当前 role: group_id=%s user_id=%s error=%s",
+                                group_id,
+                                telegram_user_id,
+                                str(exc),
+                            )
+
                 if sender_snapshot is not None:
                     await repository.UpdateProfileByGroupIdAndTelegramUserId(
                         group_id,
@@ -341,6 +372,7 @@ class BotMessageParserService:
                         is_bot=bool(sender_snapshot.get("is_bot", False)),
                         is_deactivated=bool(sender_snapshot.get("is_deactivated", False)),
                         profile_updated_at=now,
+                        role=role,
                     )
 
                 if bot is not None:
@@ -376,6 +408,19 @@ class BotMessageParserService:
                 telegram_user_id,
                 str(exc),
             )
+
+    def _map_chat_member_status_to_role(self, status: str) -> GroupUserRole | None:
+        """把 Telegram 成员状态映射为系统群成员角色。"""
+
+        if status == "creator":
+            return GroupUserRole.OWNER
+        if status == "administrator":
+            return GroupUserRole.ADMIN
+        if status == "member":
+            return GroupUserRole.MEMBER
+        if status == "restricted":
+            return GroupUserRole.RESTRICTED
+        return None
 
     def _build_sender_snapshot(self, message: Message) -> dict[str, Any] | None:
         """提取可跨任务传递的发送者快照，避免后台任务引用原始对象。"""
