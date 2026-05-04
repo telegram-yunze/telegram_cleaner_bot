@@ -12,6 +12,7 @@ from app.models.enums import GroupUserStatus
 from app.models.group import Group
 from app.models.group_message import GroupMessage
 from app.models.group_user import GroupUser
+from app.models.json_types import GroupUserProfileExtra
 
 
 class GroupRepositoryProtocol(Protocol):
@@ -73,6 +74,29 @@ class GroupUserRepositoryProtocol(Protocol):
 		group_id: int,
 		telegram_user_id: int,
 		status: GroupUserStatus,
+	) -> int: ...
+
+	async def UpdateProfileByGroupIdAndTelegramUserId(
+		self,
+		group_id: int,
+		telegram_user_id: int,
+		*,
+		username: str | None,
+		first_name: str | None,
+		last_name: str | None,
+		language_code: str | None,
+		is_bot: bool,
+		is_deactivated: bool,
+		profile_updated_at: datetime,
+	) -> int: ...
+
+	async def UpdateProfileExtraByGroupIdAndTelegramUserId(
+		self,
+		group_id: int,
+		telegram_user_id: int,
+		*,
+		profile_extra: GroupUserProfileExtra,
+		profile_updated_at: datetime,
 	) -> int: ...
 
 
@@ -297,6 +321,57 @@ class GroupUserRepository(GroupUserRepositoryProtocol):
 			update(GroupUser)
 			.where(GroupUser.group_id == group_id, GroupUser.telegram_user_id == telegram_user_id)
 			.values(status=status)
+		)
+		result = cast(CursorResult[object], await self._session.execute(stmt))
+		await self._session.flush()
+		return int(result.rowcount or 0)
+
+	async def UpdateProfileByGroupIdAndTelegramUserId(
+		self,
+		group_id: int,
+		telegram_user_id: int,
+		*,
+		username: str | None,
+		first_name: str | None,
+		last_name: str | None,
+		language_code: str | None,
+		is_bot: bool,
+		is_deactivated: bool,
+		profile_updated_at: datetime,
+	) -> int:
+		"""按群组和用户更新基础资料，并刷新资料同步时间。"""
+
+		stmt = (
+			update(GroupUser)
+			.where(GroupUser.group_id == group_id, GroupUser.telegram_user_id == telegram_user_id)
+			.values(
+				username=username,
+				first_name=first_name,
+				last_name=last_name,
+				language_code=language_code,
+				is_bot=is_bot,
+				is_deactivated=is_deactivated,
+				profile_updated_at=profile_updated_at,
+			)
+		)
+		result = cast(CursorResult[object], await self._session.execute(stmt))
+		await self._session.flush()
+		return int(result.rowcount or 0)
+
+	async def UpdateProfileExtraByGroupIdAndTelegramUserId(
+		self,
+		group_id: int,
+		telegram_user_id: int,
+		*,
+		profile_extra: GroupUserProfileExtra,
+		profile_updated_at: datetime,
+	) -> int:
+		"""按群组和用户更新扩展资料，并刷新资料同步时间。"""
+
+		stmt = (
+			update(GroupUser)
+			.where(GroupUser.group_id == group_id, GroupUser.telegram_user_id == telegram_user_id)
+			.values(profile_extra=profile_extra, profile_updated_at=profile_updated_at)
 		)
 		result = cast(CursorResult[object], await self._session.execute(stmt))
 		await self._session.flush()

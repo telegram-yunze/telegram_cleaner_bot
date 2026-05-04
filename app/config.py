@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     # ── 缓存 ─────────────────────────────────────────────────────────────
     # cashews 缓存连接串；"mem://" 表示纯内存，生产可改为 "redis://host:6379"
     cache_url: str = "mem://"
+    # 群成员缓存 TTL（秒），用于消息链路削峰，减少高频消息下重复查库
+    group_user_cache_ttl_seconds: int = 300
+    # 群成员不存在哨兵缓存 TTL（秒），用于降低缓存穿透
+    group_user_missing_cache_ttl_seconds: int = 30
+    # 群成员资料过期阈值（天），超过后异步刷新并更新 profile_updated_at
+    group_user_profile_stale_days: int = 1
+    # 同一成员异步刷新抑制窗口（秒），避免短时间内重复触发刷新
+    group_user_profile_refresh_suppress_seconds: int = 120
     # ── 安全 ─────────────────────────────────────────────────────────────────
     # API 鉴权密钥；生产必须设置为足够随机的字符串
     api_secret_key: str = ""

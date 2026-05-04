@@ -1,21 +1,36 @@
 from __future__ import annotations
 
+import asyncio
 import re
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from aiogram.types import Message
 
-from app.cache import get_group_access_cache
-from app.models.enums import MessageType
+from app.cache import (
+    get_group_access_cache,
+    get_group_user_cache,
+    set_group_user_cache_found,
+    set_group_user_cache_missing,
+    try_acquire_group_user_profile_refresh_suppress,
+)
+from app.config import get_settings
+from app.db.session import get_db_session
+from app.models.enums import GroupUserRole, GroupUserStatus, MessageType
 from app.models.group_message import GroupMessage
-from app.models.json_types import MessageContentExtra, TelegramRawPayload
+from app.models.group_user import GroupUser
+from app.models.json_types import GroupUserProfileExtra, MessageContentExtra, TelegramRawPayload
 from app.repositories.group_repository import (
+    GroupUserRepository,
     GroupMessageRepositoryProtocol,
     GroupRepositoryProtocol,
     GroupUserRepositoryProtocol,
 )
 from app.services.group_auto_register_service import GroupAutoRegisterServiceProtocol
 from app.services.bot_flow_models import ParsedMessageContext
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class BotMessageParserService:
@@ -32,6 +47,13 @@ class BotMessageParserService:
         self._group_user_repository = group_user_repository
         self._group_message_repository = group_message_repository
         self._group_auto_register_service = group_auto_register_service
+        settings = get_settings()
+        self._group_user_cache_ttl_seconds = settings.group_user_cache_ttl_seconds
+        self._group_user_missing_cache_ttl_seconds = settings.group_user_missing_cache_ttl_seconds
+        self._group_user_profile_stale_timedelta = timedelta(days=settings.group_user_profile_stale_days)
+        self._group_user_profile_refresh_suppress_seconds = (
+            settings.group_user_profile_refresh_suppress_seconds
+        )
 
     async def ParseAndSave(self, message: Message) -> ParsedMessageContext:
         """解析并落库群消息；不满足处理条件时返回可短路上下文。"""
@@ -169,10 +191,253 @@ class BotMessageParserService:
             return None, None
 
         telegram_user_id = int(message.from_user.id)
+        cached_group_user = await get_group_user_cache(group_id, telegram_user_id)
+        if cached_group_user is not None:
+            if bool(cached_group_user.get("exists")):
+                group_user_id = int(cached_group_user["group_user_id"])
+                profile_updated_at = self._timestamp_to_utc_datetime(
+                    cached_group_user.get("profile_updated_at_ts")
+                )
+                if self._is_profile_stale(profile_updated_at):
+                    await self._schedule_group_user_profile_refresh(
+                        group_id=group_id,
+                        group_user_id=group_user_id,
+                        telegram_user_id=telegram_user_id,
+                        message=message,
+                    )
+                return group_user_id, telegram_user_id
+
+            group_user = await self._create_group_user_from_message_sender(group_id=group_id, message=message)
+            if group_user is None:
+                return None, telegram_user_id
+            return group_user.id, telegram_user_id
+
         group_user = await self._group_user_repository.FindByGroupIdAndTelegramUserId(group_id, telegram_user_id)
         if group_user is None:
-            return None, telegram_user_id
+            await set_group_user_cache_missing(
+                group_id,
+                telegram_user_id,
+                ttl_seconds=self._group_user_missing_cache_ttl_seconds,
+            )
+            created_group_user = await self._create_group_user_from_message_sender(
+                group_id=group_id,
+                message=message,
+            )
+            if created_group_user is None:
+                return None, telegram_user_id
+            return created_group_user.id, telegram_user_id
+
+        await self._cache_group_user_snapshot(group_user)
+        if self._is_profile_stale(group_user.profile_updated_at):
+            await self._schedule_group_user_profile_refresh(
+                group_id=group_id,
+                group_user_id=group_user.id,
+                telegram_user_id=telegram_user_id,
+                message=message,
+            )
         return group_user.id, telegram_user_id
+
+    async def _create_group_user_from_message_sender(
+        self,
+        *,
+        group_id: int,
+        message: Message,
+    ) -> GroupUser | None:
+        """根据消息发送者自动建档群成员，并把 profile_updated_at 初始化为当前时间。"""
+
+        if message.from_user is None:
+            return None
+
+        now = self._now_utc_naive()
+        username = self._normalize_optional_str(getattr(message.from_user, "username", None))
+        first_name = self._normalize_optional_str(getattr(message.from_user, "first_name", None))
+        last_name = self._normalize_optional_str(getattr(message.from_user, "last_name", None))
+        language_code = self._normalize_optional_str(getattr(message.from_user, "language_code", None))
+        is_bot = bool(getattr(message.from_user, "is_bot", False))
+        is_deactivated = bool(getattr(message.from_user, "is_deleted", False))
+
+        entity = GroupUser(
+            group_id=group_id,
+            telegram_user_id=int(message.from_user.id),
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            language_code=language_code,
+            role=GroupUserRole.MEMBER,
+            status=GroupUserStatus.ACTIVE,
+            is_bot=is_bot,
+            is_whitelisted=False,
+            joined_at=None,
+            left_at=None,
+            profile_extra=GroupUserProfileExtra(),
+            profile_updated_at=now,
+            is_deactivated=is_deactivated,
+            warn_count=0,
+            muted_until=None,
+            restriction_until=None,
+            kicked_at=None,
+            ban_reason=None,
+        )
+        saved = await self._group_user_repository.Save(entity)
+        await self._cache_group_user_snapshot(saved)
+        return saved
+
+    async def _schedule_group_user_profile_refresh(
+        self,
+        *,
+        group_id: int,
+        group_user_id: int,
+        telegram_user_id: int,
+        message: Message,
+    ) -> None:
+        """按抑制窗口调度异步资料刷新，避免高频消息重复打库。"""
+
+        allowed = await try_acquire_group_user_profile_refresh_suppress(
+            group_id,
+            telegram_user_id,
+            suppress_ttl_seconds=self._group_user_profile_refresh_suppress_seconds,
+        )
+        if not allowed:
+            return
+        sender_snapshot = self._build_sender_snapshot(message)
+        bot = getattr(message, "bot", None)
+        asyncio.create_task(
+            self._refresh_group_user_profile_async(
+                group_id=group_id,
+                group_user_id=group_user_id,
+                telegram_user_id=telegram_user_id,
+                sender_snapshot=sender_snapshot,
+                bot=bot,
+            )
+        )
+
+    async def _refresh_group_user_profile_async(
+        self,
+        *,
+        group_id: int,
+        group_user_id: int,
+        telegram_user_id: int,
+        sender_snapshot: dict[str, Any] | None,
+        bot: Any,
+    ) -> None:
+        """异步刷新用户资料：先更新消息内字段，再尝试调用 Telegram API 补充资料。"""
+
+        try:
+            async for session in get_db_session():
+                repository = GroupUserRepository(session)
+                group_user = await repository.FindById(group_user_id)
+                if group_user is None:
+                    return
+
+                now = self._now_utc_naive()
+                if sender_snapshot is not None:
+                    await repository.UpdateProfileByGroupIdAndTelegramUserId(
+                        group_id,
+                        telegram_user_id,
+                        username=self._normalize_optional_str(sender_snapshot.get("username")),
+                        first_name=self._normalize_optional_str(sender_snapshot.get("first_name")),
+                        last_name=self._normalize_optional_str(sender_snapshot.get("last_name")),
+                        language_code=self._normalize_optional_str(sender_snapshot.get("language_code")),
+                        is_bot=bool(sender_snapshot.get("is_bot", False)),
+                        is_deactivated=bool(sender_snapshot.get("is_deactivated", False)),
+                        profile_updated_at=now,
+                    )
+
+                if bot is not None:
+                    try:
+                        chat = await bot.get_chat(telegram_user_id)
+                        bio = self._normalize_optional_str(getattr(chat, "bio", None))
+                        if bio is not None:
+                            profile_extra = group_user.profile_extra or GroupUserProfileExtra()
+                            profile_extra.bio = bio
+                            await repository.UpdateProfileExtraByGroupIdAndTelegramUserId(
+                                group_id,
+                                telegram_user_id,
+                                profile_extra=profile_extra,
+                                profile_updated_at=now,
+                            )
+                    except Exception as exc:
+                        logger.warning(
+                            "群成员资料 API 补全失败，已保留基础字段刷新: group_id=%s user_id=%s error=%s",
+                            group_id,
+                            telegram_user_id,
+                            str(exc),
+                        )
+
+                refreshed_group_user = await repository.FindById(group_user_id)
+                if refreshed_group_user is not None:
+                    await self._cache_group_user_snapshot(refreshed_group_user)
+                return
+        except Exception as exc:
+            logger.warning(
+                "异步刷新群成员资料失败: group_id=%s group_user_id=%s user_id=%s error=%s",
+                group_id,
+                group_user_id,
+                telegram_user_id,
+                str(exc),
+            )
+
+    def _build_sender_snapshot(self, message: Message) -> dict[str, Any] | None:
+        """提取可跨任务传递的发送者快照，避免后台任务引用原始对象。"""
+
+        if message.from_user is None:
+            return None
+        return {
+            "username": getattr(message.from_user, "username", None),
+            "first_name": getattr(message.from_user, "first_name", None),
+            "last_name": getattr(message.from_user, "last_name", None),
+            "language_code": getattr(message.from_user, "language_code", None),
+            "is_bot": bool(getattr(message.from_user, "is_bot", False)),
+            "is_deactivated": bool(getattr(message.from_user, "is_deleted", False)),
+        }
+
+    async def _cache_group_user_snapshot(self, group_user: GroupUser) -> None:
+        """回填群成员快照缓存，减少后续消息重复查库。"""
+
+        await set_group_user_cache_found(
+            group_user.group_id,
+            group_user.telegram_user_id,
+            group_user_id=group_user.id,
+            status=group_user.status.value if hasattr(group_user.status, "value") else str(group_user.status),
+            profile_updated_at=group_user.profile_updated_at,
+            ttl_seconds=self._group_user_cache_ttl_seconds,
+        )
+
+    def _is_profile_stale(self, profile_updated_at: datetime | None) -> bool:
+        """判断资料是否过期：空值或超过配置阈值视为过期。"""
+
+        if profile_updated_at is None:
+            return True
+
+        candidate = profile_updated_at
+        if candidate.tzinfo is not None:
+            candidate = candidate.astimezone(timezone.utc).replace(tzinfo=None)
+        threshold = self._now_utc_naive() - self._group_user_profile_stale_timedelta
+        return candidate <= threshold
+
+    def _timestamp_to_utc_datetime(self, value: object) -> datetime | None:
+        """把缓存中的秒级时间戳转换为 UTC 时间。"""
+
+        if not isinstance(value, int):
+            return None
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+
+    def _now_utc_naive(self) -> datetime:
+        """返回当前 UTC 时间（去除 tzinfo，兼容当前数据库字段类型）。"""
+
+        return datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def _normalize_optional_str(self, value: object) -> str | None:
+        """把可选字符串标准化为空值或去首尾空白后的文本。"""
+
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        return cleaned
 
     def _resolve_message_type(self, message: Message) -> MessageType:
         """根据 Telegram message 内容推导消息类型。"""
