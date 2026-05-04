@@ -11,6 +11,7 @@ import app.config as config_module
 from app.deps import get_db
 from app.main import app
 from app.models.enums import GroupChatType
+from app.models.json_types import GroupSettings
 from app.schemas.group import GroupRead
 
 
@@ -38,6 +39,52 @@ class _GroupServiceForPatch:
             is_active=True,
             is_authorized=True,
             settings=None,
+            bot_permissions=None,
+            last_message_at=None,
+            active_rules_count=0,
+            pending_moderation_count=0,
+            message_count=0,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+
+class _GroupServiceForAuthorizationPatch:
+    async def UpdateAuthorizationById(self, group_id: int, payload):
+        return GroupRead(
+            id=group_id,
+            telegram_group_id=-10001,
+            title="测试群",
+            username=None,
+            chat_type=GroupChatType.SUPERGROUP,
+            description=None,
+            owner_telegram_user_id=None,
+            is_active=True,
+            is_authorized=payload.is_authorized,
+            settings=None,
+            bot_permissions=None,
+            last_message_at=None,
+            active_rules_count=0,
+            pending_moderation_count=0,
+            message_count=0,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+
+class _GroupServiceForSettingsPut:
+    async def ReplaceSettingsById(self, group_id: int, payload):
+        return GroupRead(
+            id=group_id,
+            telegram_group_id=-10001,
+            title="测试群",
+            username=None,
+            chat_type=GroupChatType.SUPERGROUP,
+            description=None,
+            owner_telegram_user_id=None,
+            is_active=True,
+            is_authorized=True,
+            settings=payload.settings,
             bot_permissions=None,
             last_message_at=None,
             active_rules_count=0,
@@ -106,6 +153,43 @@ class ApiAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["is_authorized"])
+
+    def test_patch_group_authorization_with_valid_api_key(self) -> None:
+        valid_key = config_module.get_runtime_api_secret_key()
+        with patch("app.api.groups.get_group_service", return_value=_GroupServiceForAuthorizationPatch()):
+            with TestClient(app) as client:
+                response = client.patch(
+                    "/groups/1/authorization",
+                    headers={"X-API-Key": valid_key},
+                    json={"is_authorized": False},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["is_authorized"])
+
+    def test_put_group_settings_with_valid_api_key(self) -> None:
+        valid_key = config_module.get_runtime_api_secret_key()
+        with patch("app.api.groups.get_group_service", return_value=_GroupServiceForSettingsPut()):
+            with TestClient(app) as client:
+                response = client.put(
+                    "/groups/1/settings",
+                    headers={"X-API-Key": valid_key},
+                    json={
+                        "settings": GroupSettings(
+                            ad_detection_enabled=True,
+                            auto_delete_enabled=True,
+                            mute_duration_seconds=600,
+                            notify_enabled=True,
+                            notify_auto_recall=True,
+                            notify_recall_delay_seconds=8,
+                        ).model_dump(mode="json")
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["settings"]["mute_duration_seconds"], 600)
 
     def test_empty_env_secret_generates_runtime_secret_and_keeps_stable(self) -> None:
         with patch("app.config.get_settings", return_value=SimpleNamespace(api_secret_key="")):

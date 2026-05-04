@@ -14,11 +14,13 @@ from app.repositories.group_repository import (
 from app.repositories.moderation_repository import ModerationRepositoryProtocol
 from app.repositories.rule_repository import RuleRepositoryProtocol
 from app.schemas.group import (
+    GroupAuthorizationUpdate,
     GroupCreate,
     GroupListItem,
     GroupListResponse,
     GroupQuery,
     GroupRead,
+    GroupSettingsReplace,
     GroupUpdate,
 )
 
@@ -91,6 +93,46 @@ class GroupService:
         for field_name, field_value in update_values.items():
             setattr(entity, field_name, field_value)
 
+        saved_entity = await self._group_repository.Save(entity)
+        await set_group_access_cache(
+            saved_entity.telegram_group_id,
+            group_id=saved_entity.id,
+            is_authorized=bool(saved_entity.is_authorized),
+        )
+        return await self._to_group_read(saved_entity)
+
+    async def UpdateAuthorizationById(
+        self,
+        group_id: int,
+        payload: GroupAuthorizationUpdate,
+    ) -> GroupRead | None:
+        """按主键更新群组授权状态。"""
+
+        entity = await self._group_repository.FindById(group_id)
+        if entity is None:
+            return None
+
+        entity.is_authorized = payload.is_authorized
+        saved_entity = await self._group_repository.Save(entity)
+        await set_group_access_cache(
+            saved_entity.telegram_group_id,
+            group_id=saved_entity.id,
+            is_authorized=bool(saved_entity.is_authorized),
+        )
+        return await self._to_group_read(saved_entity)
+
+    async def ReplaceSettingsById(
+        self,
+        group_id: int,
+        payload: GroupSettingsReplace,
+    ) -> GroupRead | None:
+        """按主键全量替换群组设置。"""
+
+        entity = await self._group_repository.FindById(group_id)
+        if entity is None:
+            return None
+
+        entity.settings = payload.settings
         saved_entity = await self._group_repository.Save(entity)
         await set_group_access_cache(
             saved_entity.telegram_group_id,

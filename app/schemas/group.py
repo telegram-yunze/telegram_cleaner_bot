@@ -45,6 +45,23 @@ class GroupUpdate(BaseModel):
 	bot_permissions: BotPermissions | None = Field(default=None, description="机器人在群里的权限配置")
 
 
+class GroupAuthorizationUpdate(BaseModel):
+	"""更新群组授权状态请求。"""
+
+	model_config = ConfigDict(from_attributes=True)
+
+	is_authorized: bool = Field(..., description="是否已授权使用机器人")
+
+
+class GroupSettingsReplace(BaseModel):
+	"""全量覆盖群组设置请求。"""
+
+	model_config = ConfigDict(from_attributes=True)
+
+	# 使用必填字段表达 PUT 的替换语义：必须显式提供 settings（允许传 null 清空）。
+	settings: GroupSettings | None = Field(..., description="群组维度配置")
+
+
 class GroupRead(GroupSchemaBase):
 	"""群组详情响应。"""
 
@@ -99,6 +116,8 @@ __all__ = [
 	"GroupSchemaBase",
 	"GroupCreate",
 	"GroupUpdate",
+	"GroupAuthorizationUpdate",
+	"GroupSettingsReplace",
 	"GroupRead",
 	"GroupListItem",
 	"GroupListResponse",

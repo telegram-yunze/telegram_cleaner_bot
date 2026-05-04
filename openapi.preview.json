@@ -1,0 +1,4335 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Telegram Cleaner Bot API",
+    "summary": "Telegram 群组清理与审核管理 API",
+    "description": "用于 Telegram 群组治理的后端 API。\n\n- 提供群组、规则、处置记录三类核心资源管理能力\n- 统一返回结构化错误体，便于前端与 AI 调用端稳定解析\n- 列表接口均采用 limit/offset 分页语义\n\n鉴权约定（前端调用必读）\n- 受保护路由：/groups、/rules、/moderation（必须带 X-API-Key）\n- 公开路由：/、/health（无需鉴权）\n- 请求头示例：X-API-Key: your_api_secret_key\n- curl 示例：curl -H \"X-API-Key: your_api_secret_key\" http://localhost:8000/groups?limit=10&offset=0\n- 鉴权失败：返回 401，错误码 UNAUTHORIZED。",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "健康检查",
+        "description": "返回服务健康状态，用于网关探活和部署后快速联通性检查。",
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/telegram": {
+      "post": {
+        "tags": [
+          "webhook"
+        ],
+        "summary": "Telegram Webhook 回调入口",
+        "description": "接收 Telegram 推送更新并交由 aiogram 处理。请求头必须携带 X-Telegram-Bot-Api-Secret-Token。",
+        "operationId": "telegram_webhook_receive_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups": {
+      "post": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "创建群组",
+        "description": "创建一个新的群组配置记录，返回创建后的完整群组信息。",
+        "operationId": "create_group",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "查询群组列表",
+        "description": "按分页条件与启用状态筛选群组列表。",
+        "operationId": "list_groups",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/{group_id}": {
+      "get": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "查询群组详情",
+        "description": "按群组主键 ID 查询单个群组详情。",
+        "operationId": "get_group_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "群组主键 ID",
+              "title": "Group Id"
+            },
+            "description": "群组主键 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "更新群组",
+        "description": "按群组主键 ID 局部更新群组配置。",
+        "operationId": "update_group_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "群组主键 ID",
+              "title": "Group Id"
+            },
+            "description": "群组主键 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "删除群组",
+        "description": "按群组主键 ID 删除群组。删除成功后返回 204，无响应体。",
+        "operationId": "delete_group_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "群组主键 ID",
+              "title": "Group Id"
+            },
+            "description": "群组主键 ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "删除成功，无响应体"
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/{group_id}/authorization": {
+      "patch": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "更新群组授权状态",
+        "description": "按群组主键 ID 更新群组授权状态。",
+        "operationId": "update_group_authorization_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "群组主键 ID",
+              "title": "Group Id"
+            },
+            "description": "群组主键 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupAuthorizationUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/{group_id}/settings": {
+      "put": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "全量覆盖群组设置",
+        "description": "按群组主键 ID 全量覆盖群组设置。",
+        "operationId": "replace_group_settings_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "群组主键 ID",
+              "title": "Group Id"
+            },
+            "description": "群组主键 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupSettingsReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rules": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "创建规则",
+        "description": "创建一条新的风控规则，返回创建后的规则详情。",
+        "operationId": "create_rule",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "查询规则列表",
+        "description": "按群组、启用状态、规则类型等条件分页查询规则。",
+        "operationId": "list_rules",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "is_enabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Enabled"
+            }
+          },
+          {
+            "name": "rule_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RuleType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rule Type"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rules/{rule_id}": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "查询规则详情",
+        "description": "按规则主键 ID 查询单条规则详情。",
+        "operationId": "get_rule_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "规则主键 ID",
+              "title": "Rule Id"
+            },
+            "description": "规则主键 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "更新规则",
+        "description": "按规则主键 ID 局部更新规则字段。",
+        "operationId": "update_rule_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "规则主键 ID",
+              "title": "Rule Id"
+            },
+            "description": "规则主键 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "删除规则",
+        "description": "按规则主键 ID 删除规则。删除成功后返回 204，无响应体。",
+        "operationId": "delete_rule_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "规则主键 ID",
+              "title": "Rule Id"
+            },
+            "description": "规则主键 ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "删除成功，无响应体"
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/moderation": {
+      "post": {
+        "tags": [
+          "moderation"
+        ],
+        "summary": "创建处置记录",
+        "description": "创建一条新的审核处置记录，记录动作、状态与原因等信息。",
+        "operationId": "create_moderation_record",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationRecordCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationRecordRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "moderation"
+        ],
+        "summary": "查询处置记录列表",
+        "description": "按群组与执行状态等条件分页查询处置记录。",
+        "operationId": "list_moderation_records",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ModerationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationRecordListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/moderation/{moderation_record_id}": {
+      "get": {
+        "tags": [
+          "moderation"
+        ],
+        "summary": "查询处置记录详情",
+        "description": "按处置记录主键 ID 查询单条处置记录详情。",
+        "operationId": "get_moderation_record_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "moderation_record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "处置记录主键 ID",
+              "title": "Moderation Record Id"
+            },
+            "description": "处置记录主键 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationRecordRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "moderation"
+        ],
+        "summary": "更新处置记录",
+        "description": "按主键 ID 局部更新处置记录字段。",
+        "operationId": "update_moderation_record_by_id",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "moderation_record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "处置记录主键 ID",
+              "title": "Moderation Record Id"
+            },
+            "description": "处置记录主键 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationRecordUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationRecordRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/moderation/{moderation_record_id}/status": {
+      "patch": {
+        "tags": [
+          "moderation"
+        ],
+        "summary": "更新处置状态",
+        "description": "按主键 ID 更新处置状态，适用于 pending/success/failed/skipped 流转。",
+        "operationId": "update_moderation_record_status",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "moderation_record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "处置记录主键 ID",
+              "title": "Moderation Record Id"
+            },
+            "description": "处置记录主键 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationRecordUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationRecordRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败：缺失或无效的 X-API-Key 请求头",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "UNAUTHORIZED",
+                  "message": "API 密钥无效",
+                  "request_id": "a29f13f9a8d24e6da3a6c4d9ce80f641",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/groups/1"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "example": {
+                  "code": "RESOURCE_NOT_FOUND",
+                  "message": "资源不存在",
+                  "request_id": "c6f7f8c4a0c346f28fe5d4c0fcab0d72",
+                  "timestamp": "2026-05-04T08:00:00Z",
+                  "path": "/api/groups/999"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "服务基础信息",
+        "description": "返回服务名称与运行状态，可用于最基础联通性检查。",
+        "operationId": "get_service_root",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Get Service Root"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BotPermissions": {
+        "properties": {
+          "can_manage_chat": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Can Manage Chat"
+          },
+          "can_delete_messages": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Can Delete Messages"
+          },
+          "can_restrict_members": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Can Restrict Members"
+          },
+          "can_invite_users": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Can Invite Users"
+          },
+          "can_pin_messages": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Can Pin Messages"
+          },
+          "can_manage_topics": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Can Manage Topics"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "BotPermissions",
+        "description": "机器人在群内的权限快照，由 Telegram API 同步写入。"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "业务错误码"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "对外可读的错误说明"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "description": "请求追踪 ID"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "错误响应生成时间"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "请求路径"
+          },
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail",
+            "description": "错误附加信息"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "request_id",
+          "timestamp",
+          "path"
+        ],
+        "title": "ErrorResponse",
+        "description": "统一错误响应结构。",
+        "example": {
+          "code": "REQUEST_VALIDATION_ERROR",
+          "detail": [
+            {
+              "loc": [
+                "body",
+                "code"
+              ],
+              "msg": "Field required"
+            }
+          ],
+          "message": "请求参数校验失败",
+          "path": "/api/rules",
+          "request_id": "af6a7f9b0b0d4cb6bd23e9a06e18a3f5",
+          "timestamp": "2026-05-04T08:00:00Z"
+        }
+      },
+      "GroupAuthorizationUpdate": {
+        "properties": {
+          "is_authorized": {
+            "type": "boolean",
+            "title": "Is Authorized",
+            "description": "是否已授权使用机器人"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_authorized"
+        ],
+        "title": "GroupAuthorizationUpdate",
+        "description": "更新群组授权状态请求。"
+      },
+      "GroupChatType": {
+        "type": "string",
+        "enum": [
+          "group",
+          "supergroup"
+        ],
+        "title": "GroupChatType",
+        "description": "Telegram 群会话类型。"
+      },
+      "GroupCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Title",
+            "description": "群组名称"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "群组公开用户名"
+          },
+          "chat_type": {
+            "$ref": "#/components/schemas/GroupChatType",
+            "description": "群组类型",
+            "default": "supergroup"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "群组描述"
+          },
+          "owner_telegram_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Telegram User Id",
+            "description": "群主 Telegram 用户 ID"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用清理",
+            "default": true
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupSettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "群组维度配置"
+          },
+          "bot_permissions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BotPermissions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "机器人在群里的权限配置"
+          },
+          "telegram_group_id": {
+            "type": "integer",
+            "title": "Telegram Group Id",
+            "description": "Telegram 群组 ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "telegram_group_id"
+        ],
+        "title": "GroupCreate",
+        "description": "创建群组请求。"
+      },
+      "GroupListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "群组主键 ID"
+          },
+          "telegram_group_id": {
+            "type": "integer",
+            "title": "Telegram Group Id",
+            "description": "Telegram 群组 ID"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "群组名称"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "群组公开用户名"
+          },
+          "chat_type": {
+            "$ref": "#/components/schemas/GroupChatType",
+            "description": "群组类型"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用清理"
+          },
+          "is_authorized": {
+            "type": "boolean",
+            "title": "Is Authorized",
+            "description": "是否已授权使用机器人",
+            "default": false
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message At",
+            "description": "最近消息时间"
+          },
+          "active_rules_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Active Rules Count",
+            "description": "启用规则数量",
+            "default": 0
+          },
+          "pending_moderation_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Pending Moderation Count",
+            "description": "待处理处置数量",
+            "default": 0
+          },
+          "message_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Message Count",
+            "description": "消息总数",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "创建时间"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "telegram_group_id",
+          "title",
+          "chat_type",
+          "is_active",
+          "created_at"
+        ],
+        "title": "GroupListItem",
+        "description": "群组列表项。"
+      },
+      "GroupListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GroupListItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "群组列表"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "description": "总记录数",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Limit",
+            "description": "分页大小",
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset",
+            "description": "分页偏移",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "GroupListResponse",
+        "description": "群组列表响应。"
+      },
+      "GroupRead": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Title",
+            "description": "群组名称"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "群组公开用户名"
+          },
+          "chat_type": {
+            "$ref": "#/components/schemas/GroupChatType",
+            "description": "群组类型",
+            "default": "supergroup"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "群组描述"
+          },
+          "owner_telegram_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Telegram User Id",
+            "description": "群主 Telegram 用户 ID"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用清理",
+            "default": true
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupSettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "群组维度配置"
+          },
+          "bot_permissions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BotPermissions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "机器人在群里的权限配置"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "群组主键 ID"
+          },
+          "telegram_group_id": {
+            "type": "integer",
+            "title": "Telegram Group Id",
+            "description": "Telegram 群组 ID"
+          },
+          "is_authorized": {
+            "type": "boolean",
+            "title": "Is Authorized",
+            "description": "是否已授权使用机器人",
+            "default": false
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message At",
+            "description": "最近消息时间"
+          },
+          "active_rules_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Active Rules Count",
+            "description": "启用规则数量",
+            "default": 0
+          },
+          "pending_moderation_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Pending Moderation Count",
+            "description": "待处理处置数量",
+            "default": 0
+          },
+          "message_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Message Count",
+            "description": "消息总数",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "创建时间"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "更新时间"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "id",
+          "telegram_group_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "GroupRead",
+        "description": "群组详情响应。"
+      },
+      "GroupSettings": {
+        "properties": {
+          "ad_detection_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ad Detection Enabled"
+          },
+          "auto_delete_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Delete Enabled"
+          },
+          "mute_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mute Duration Seconds"
+          },
+          "punishment_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PunishmentPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notify_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Enabled"
+          },
+          "notify_auto_recall": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Auto Recall"
+          },
+          "notify_recall_delay_seconds": {
+            "type": "integer",
+            "title": "Notify Recall Delay Seconds",
+            "default": 5
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "GroupSettings",
+        "description": "群组维度设置。"
+      },
+      "GroupSettingsReplace": {
+        "properties": {
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupSettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "群组维度配置"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings"
+        ],
+        "title": "GroupSettingsReplace",
+        "description": "全量覆盖群组设置请求。"
+      },
+      "GroupUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "群组名称"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "群组公开用户名"
+          },
+          "chat_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupChatType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "群组类型"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "群组描述"
+          },
+          "owner_telegram_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Telegram User Id",
+            "description": "群主 Telegram 用户 ID"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "description": "是否启用清理"
+          },
+          "is_authorized": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Authorized",
+            "description": "是否已授权使用机器人"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupSettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "群组维度配置"
+          },
+          "bot_permissions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BotPermissions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "机器人在群里的权限配置"
+          }
+        },
+        "type": "object",
+        "title": "GroupUpdate",
+        "description": "更新群组请求。"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ModerationAction": {
+        "type": "string",
+        "enum": [
+          "delete",
+          "warn",
+          "mute",
+          "permanent_mute",
+          "restrict",
+          "kick",
+          "ban",
+          "review",
+          "ignore"
+        ],
+        "title": "ModerationAction",
+        "description": "命中规则后可执行的动作。"
+      },
+      "ModerationRecordCreate": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ModerationAction",
+            "description": "执行动作"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModerationStatus",
+            "description": "执行状态",
+            "default": "pending"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "处置原因"
+          },
+          "result_detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModerationResultDetail"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行结果详情"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "所属群组主键"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id",
+            "description": "关联消息主键"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id",
+            "description": "被处置成员主键"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id",
+            "description": "命中规则主键"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "group_id"
+        ],
+        "title": "ModerationRecordCreate",
+        "description": "创建审核记录请求。"
+      },
+      "ModerationRecordListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "审核记录主键 ID"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "所属群组主键"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id",
+            "description": "关联消息主键"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id",
+            "description": "被处置成员主键"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id",
+            "description": "命中规则主键"
+          },
+          "action": {
+            "$ref": "#/components/schemas/ModerationAction",
+            "description": "执行动作"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModerationStatus",
+            "description": "执行状态"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "处置原因"
+          },
+          "target_telegram_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Telegram User Id",
+            "description": "被处置成员 Telegram 用户 ID"
+          },
+          "rule_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Code",
+            "description": "命中规则编码"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "创建时间"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "group_id",
+          "action",
+          "status",
+          "created_at"
+        ],
+        "title": "ModerationRecordListItem",
+        "description": "审核记录列表项。"
+      },
+      "ModerationRecordListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationRecordListItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "审核记录列表"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "description": "总记录数",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Limit",
+            "description": "分页大小",
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset",
+            "description": "分页偏移",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ModerationRecordListResponse",
+        "description": "审核记录列表响应。"
+      },
+      "ModerationRecordRead": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ModerationAction",
+            "description": "执行动作"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModerationStatus",
+            "description": "执行状态",
+            "default": "pending"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "处置原因"
+          },
+          "result_detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModerationResultDetail"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行结果详情"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "审核记录主键 ID"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "所属群组主键"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id",
+            "description": "关联消息主键"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id",
+            "description": "被处置成员主键"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Id",
+            "description": "命中规则主键"
+          },
+          "target_telegram_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Telegram User Id",
+            "description": "被处置成员 Telegram 用户 ID"
+          },
+          "rule_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Code",
+            "description": "命中规则编码"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "创建时间"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "更新时间"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "id",
+          "group_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ModerationRecordRead",
+        "description": "审核记录详情响应。"
+      },
+      "ModerationRecordUpdate": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModerationAction"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行动作"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModerationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行状态"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "处置原因"
+          },
+          "result_detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModerationResultDetail"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行结果详情"
+          }
+        },
+        "type": "object",
+        "title": "ModerationRecordUpdate",
+        "description": "更新审核记录请求。"
+      },
+      "ModerationResultDetail": {
+        "properties": {
+          "success": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "kicked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kicked"
+          },
+          "muted_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Muted Until"
+          },
+          "restricted_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restricted Until"
+          },
+          "escalated_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalated To"
+          },
+          "rule_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Reason"
+          },
+          "detector_reasons": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Reasons"
+          },
+          "risk_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Score"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ModerationResultDetail",
+        "description": "处置执行结果详情，记录执行成功与否及惩罚细节。"
+      },
+      "ModerationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "success",
+          "failed",
+          "skipped"
+        ],
+        "title": "ModerationStatus",
+        "description": "处置执行状态。"
+      },
+      "PunishmentPolicy": {
+        "properties": {
+          "auto_escalate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Escalate"
+          },
+          "warn_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warn Threshold"
+          },
+          "mute_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mute Threshold"
+          },
+          "kick_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kick Threshold"
+          },
+          "default_mute_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Mute Seconds"
+          },
+          "default_restrict_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Restrict Seconds"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "PunishmentPolicy",
+        "description": "群组级别的自动惩罚升级策略配置。"
+      },
+      "RuleCreate": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Code",
+            "description": "规则编码"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Name",
+            "description": "规则名称"
+          },
+          "rule_type": {
+            "$ref": "#/components/schemas/RuleType",
+            "description": "规则类型"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pattern",
+            "description": "关键词或正则"
+          },
+          "action": {
+            "$ref": "#/components/schemas/ModerationAction",
+            "description": "命中后动作",
+            "default": "delete"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Priority",
+            "description": "优先级",
+            "default": 100
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled",
+            "description": "是否启用",
+            "default": true
+          },
+          "options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "规则扩展配置"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "所属群组主键"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "rule_type",
+          "group_id"
+        ],
+        "title": "RuleCreate",
+        "description": "创建规则请求。"
+      },
+      "RuleListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "规则主键 ID"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "所属群组主键"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "规则编码"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "规则名称"
+          },
+          "rule_type": {
+            "$ref": "#/components/schemas/RuleType",
+            "description": "规则类型"
+          },
+          "action": {
+            "$ref": "#/components/schemas/ModerationAction",
+            "description": "命中后动作"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Priority",
+            "description": "优先级"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled",
+            "description": "是否启用"
+          },
+          "related_moderation_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Related Moderation Count",
+            "description": "关联处置记录数",
+            "default": 0
+          },
+          "hit_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Hit Count",
+            "description": "命中次数",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "创建时间"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "group_id",
+          "code",
+          "name",
+          "rule_type",
+          "action",
+          "priority",
+          "is_enabled",
+          "created_at"
+        ],
+        "title": "RuleListItem",
+        "description": "规则列表项。"
+      },
+      "RuleListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RuleListItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "规则列表"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "description": "总记录数",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Limit",
+            "description": "分页大小",
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset",
+            "description": "分页偏移",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "RuleListResponse",
+        "description": "规则列表响应。"
+      },
+      "RuleOptions": {
+        "properties": {
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keywords"
+          },
+          "whitelist": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whitelist"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "RuleOptions",
+        "description": "规则扩展选项，用于精细化控制规则的匹配行为。"
+      },
+      "RuleRead": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Code",
+            "description": "规则编码"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Name",
+            "description": "规则名称"
+          },
+          "rule_type": {
+            "$ref": "#/components/schemas/RuleType",
+            "description": "规则类型"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pattern",
+            "description": "关键词或正则"
+          },
+          "action": {
+            "$ref": "#/components/schemas/ModerationAction",
+            "description": "命中后动作",
+            "default": "delete"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Priority",
+            "description": "优先级",
+            "default": 100
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled",
+            "description": "是否启用",
+            "default": true
+          },
+          "options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "规则扩展配置"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "规则主键 ID"
+          },
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "所属群组主键"
+          },
+          "related_moderation_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Related Moderation Count",
+            "description": "关联处置记录数",
+            "default": 0
+          },
+          "hit_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Hit Count",
+            "description": "命中次数",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "创建时间"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "更新时间"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "rule_type",
+          "id",
+          "group_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RuleRead",
+        "description": "规则详情响应。"
+      },
+      "RuleType": {
+        "type": "string",
+        "enum": [
+          "keyword",
+          "regex",
+          "url",
+          "username",
+          "contact",
+          "ai"
+        ],
+        "title": "RuleType",
+        "description": "规则类型。"
+      },
+      "RuleUpdate": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code",
+            "description": "规则编码"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "规则名称"
+          },
+          "rule_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "规则类型"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pattern",
+            "description": "关键词或正则"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModerationAction"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "命中后动作"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority",
+            "description": "优先级"
+          },
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled",
+            "description": "是否启用"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "规则扩展配置"
+          }
+        },
+        "type": "object",
+        "title": "RuleUpdate",
+        "description": "更新规则请求。"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "description": "服务 API 鉴权密钥。\n\n受保护路由：/groups、/rules、/moderation。\n公开路由：/、/health。\n\n请求头格式：X-API-Key: <API_SECRET_KEY>\n\n若 API_SECRET_KEY 为空，服务启动时会随机生成一个进程内有效密钥（重启后变化）。",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "健康检查接口，用于探活与部署后联通性校验。"
+    },
+    {
+      "name": "groups",
+      "description": "群组管理接口，负责群组信息的创建、查询、更新与删除。"
+    },
+    {
+      "name": "rules",
+      "description": "规则管理接口，负责风控规则的维护与检索。"
+    },
+    {
+      "name": "moderation",
+      "description": "处置记录接口，负责审核动作记录的创建、查询与状态更新。"
+    },
+    {
+      "name": "webhook",
+      "description": "Telegram Webhook 回调接口，用于接收机器人更新事件。"
+    }
+  ]
+}

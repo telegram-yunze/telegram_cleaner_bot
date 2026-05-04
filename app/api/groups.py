@@ -7,7 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_group_service
 from app.exceptions import ResourceNotFoundError
-from app.schemas.group import GroupCreate, GroupListResponse, GroupQuery, GroupRead, GroupUpdate
+from app.schemas.group import (
+    GroupAuthorizationUpdate,
+    GroupCreate,
+    GroupListResponse,
+    GroupQuery,
+    GroupRead,
+    GroupSettingsReplace,
+    GroupUpdate,
+)
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -79,6 +87,46 @@ async def update_group_by_id(
     """按主键更新群组。"""
 
     group = await get_group_service(session).UpdateById(group_id, payload)
+    if group is None:
+        raise ResourceNotFoundError(resource="群组")
+    return group
+
+
+@router.patch(
+    "/{group_id}/authorization",
+    response_model=GroupRead,
+    summary="更新群组授权状态",
+    description="按群组主键 ID 更新群组授权状态。",
+    operation_id="update_group_authorization_by_id",
+)
+async def update_group_authorization_by_id(
+    group_id: Annotated[int, Path(..., ge=1, description="群组主键 ID")],
+    payload: GroupAuthorizationUpdate,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> GroupRead:
+    """按主键更新群组授权状态。"""
+
+    group = await get_group_service(session).UpdateAuthorizationById(group_id, payload)
+    if group is None:
+        raise ResourceNotFoundError(resource="群组")
+    return group
+
+
+@router.put(
+    "/{group_id}/settings",
+    response_model=GroupRead,
+    summary="全量覆盖群组设置",
+    description="按群组主键 ID 全量覆盖群组设置。",
+    operation_id="replace_group_settings_by_id",
+)
+async def replace_group_settings_by_id(
+    group_id: Annotated[int, Path(..., ge=1, description="群组主键 ID")],
+    payload: GroupSettingsReplace,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> GroupRead:
+    """按主键全量覆盖群组设置。"""
+
+    group = await get_group_service(session).ReplaceSettingsById(group_id, payload)
     if group is None:
         raise ResourceNotFoundError(resource="群组")
     return group

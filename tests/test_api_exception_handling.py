@@ -24,6 +24,9 @@ class _GroupServiceNotFound:
     async def FindById(self, group_id: int):
         return None
 
+    async def UpdateAuthorizationById(self, group_id: int, payload):
+        return None
+
 
 class _GroupServiceBoom:
     async def FindById(self, group_id: int):
@@ -110,6 +113,32 @@ class ApiExceptionHandlingTests(unittest.TestCase):
         self.assertEqual(payload["message"], "请求参数校验失败")
         self.assertEqual(payload["path"], "/groups")
         self.assertIsInstance(payload.get("detail"), list)
+
+    def test_put_group_settings_validation_error_response_shape(self) -> None:
+        with TestClient(app) as client:
+            response = client.put("/groups/1/settings", json={}, headers=self.auth_headers)
+
+        self.assertEqual(response.status_code, 422)
+        payload = response.json()
+        self.assertEqual(payload["code"], "REQUEST_VALIDATION_ERROR")
+        self.assertEqual(payload["message"], "请求参数校验失败")
+        self.assertEqual(payload["path"], "/groups/1/settings")
+        self.assertIsInstance(payload.get("detail"), list)
+
+    def test_patch_group_authorization_not_found_error_response_shape(self) -> None:
+        with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
+            with TestClient(app) as client:
+                response = client.patch(
+                    "/groups/10086/authorization",
+                    json={"is_authorized": True},
+                    headers=self.auth_headers,
+                )
+
+        self.assertEqual(response.status_code, 404)
+        payload = response.json()
+        self.assertEqual(payload["code"], "RESOURCE_NOT_FOUND")
+        self.assertEqual(payload["message"], "群组不存在")
+        self.assertEqual(payload["path"], "/groups/10086/authorization")
 
     def test_unexpected_error_response_shape(self) -> None:
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceBoom()):
