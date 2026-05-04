@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api"
     log_level: str = "INFO"
+    # uvicorn 监听地址与端口；启动脚本优先读取这两个值
+    host: str = "0.0.0.0"
+    port: int = 8000
 
     # ── Telegram Bot ─────────────────────────────────────────────────────────
     telegram_bot_token: str = ""
@@ -39,6 +42,10 @@ class Settings(BaseSettings):
     webhook_path: str = "/webhook/telegram"
     telegram_polling_timeout: int = 30
     telegram_action_dry_run: bool = True
+    # 代理地址（仅 polling/both 模式下生效）；留空表示不使用代理
+    # 支持 HTTP/HTTPS 代理，格式如 http://127.0.0.1:7890
+    # SOCKS5 代理需额外安装 aiohttp-socks，格式如 socks5://127.0.0.1:1080
+    telegram_proxy_url: str = ""
     # ── 缓存 ─────────────────────────────────────────────────────────────
     # cashews 缓存连接串；"mem://" 表示纯内存，生产可改为 "redis://host:6379"
     cache_url: str = "mem://"

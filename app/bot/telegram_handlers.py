@@ -5,6 +5,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message
 
 from app.bot.handlers import execute_handler_safely
+from app.bot.responses import load_bot_response
 from app.config import get_settings
 from app.db.session import get_db_session
 from app.deps import (
@@ -18,9 +19,10 @@ logger = get_logger(__name__)
 
 
 async def _reply_start_message(message: Message) -> None:
-    """处理 /start 指令，返回最小可用提示。"""
+    """处理 /start 指令，响应内容从 resources/bot/start.txt 读取；文件缺失时降级到硬编码 fallback。"""
 
-    await message.answer("机器人基础框架已就绪，功能正在逐步接入。")
+    text = load_bot_response("start")
+    await message.answer(text)
 
 
 async def _reply_default_message(message: Message) -> None:

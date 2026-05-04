@@ -2,8 +2,18 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from pathlib import Path
+import sys
 
 from fastapi import FastAPI
+
+# 兼容直接执行 `python app/main.py` 的场景：
+# 脚本直跑时 Python 搜索路径会落在 app/ 目录，导致 `from app...` 导入失败。
+# 这里将项目根目录注入 sys.path，保证绝对导入可用。
+if __package__ in {None, ""}:
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 from app.api.router import api_router
 from app.bot.dispatcher import (
@@ -21,7 +31,6 @@ from app.db.session import dispose_engine
 from app.exception_handlers import register_exception_handlers
 from app.middleware.request_context import RequestContextMiddleware
 from app.utils.logger import configure_logging, get_logger
-
 
 OPENAPI_TAGS = [
     {
@@ -97,7 +106,7 @@ app = FastAPI(
         "- 受保护路由：/groups、/rules、/moderation（必须带 X-API-Key）\n"
         "- 公开路由：/、/health（无需鉴权）\n"
         "- 请求头示例：X-API-Key: your_api_secret_key\n"
-        "- curl 示例：curl -H \"X-API-Key: your_api_secret_key\" "
+        '- curl 示例：curl -H "X-API-Key: your_api_secret_key" '
         "http://localhost:8000/groups?limit=10&offset=0\n"
         "- 鉴权失败：返回 401，错误码 UNAUTHORIZED。"
     ),

@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import Update
 
 from app.bot.runner import run_bot
@@ -62,13 +63,20 @@ async def initialize_telegram_runtime(settings: Settings) -> TelegramRuntime:
         _replace_runtime(runtime)
         return runtime
 
-    bot = Bot(token=token)
+    # 按配置决定是否使用代理；代理 URL 不打印到日志，避免泄露凭据
+    proxy_url = settings.telegram_proxy_url.strip()
+    session = AiohttpSession(proxy=proxy_url) if proxy_url else None
+    bot = Bot(token=token, session=session) if session else Bot(token=token)
     dispatcher = Dispatcher()
     dispatcher.include_router(build_telegram_router())
 
     runtime = TelegramRuntime(bot=bot, dispatcher=dispatcher)
     _replace_runtime(runtime)
-    logger.info("Telegram 运行时初始化完成: mode=%s", settings.telegram_run_mode)
+    logger.info(
+        "Telegram 运行时初始化完成: mode=%s proxy=%s",
+        settings.telegram_run_mode,
+        "已启用" if proxy_url else "未启用",
+    )
     return runtime
 
 
