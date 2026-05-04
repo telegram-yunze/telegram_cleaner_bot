@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.config import get_runtime_api_secret_key
 from app.deps import get_db
 from app.main import app
@@ -18,6 +19,15 @@ async def _override_get_db():
     """测试阶段注入空会话，路由中的 service 工厂会被 mock。"""
 
     yield None
+
+
+def _api(path: str) -> str:
+    """按配置拼接 API 路径，保证测试与 API_PREFIX 一致。"""
+
+    prefix = get_settings().api_prefix
+    if not prefix:
+        return path
+    return f"{prefix}{path}"
 
 
 class _GroupServiceNotFound:
@@ -93,43 +103,43 @@ class ApiExceptionHandlingTests(unittest.TestCase):
     def test_not_found_error_response_shape(self) -> None:
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/10086", headers=self.auth_headers)
+                response = client.get(_api("/groups/10086"), headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 404)
         payload = response.json()
         self.assertEqual(payload["code"], "RESOURCE_NOT_FOUND")
         self.assertEqual(payload["message"], "群组不存在")
-        self.assertEqual(payload["path"], "/groups/10086")
+        self.assertEqual(payload["path"], _api("/groups/10086"))
         self.assertTrue(payload.get("request_id"))
         self.assertTrue(payload.get("timestamp"))
 
     def test_validation_error_response_shape(self) -> None:
         with TestClient(app) as client:
-            response = client.post("/groups", json={}, headers=self.auth_headers)
+            response = client.post(_api("/groups"), json={}, headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 422)
         payload = response.json()
         self.assertEqual(payload["code"], "REQUEST_VALIDATION_ERROR")
         self.assertEqual(payload["message"], "请求参数校验失败")
-        self.assertEqual(payload["path"], "/groups")
+        self.assertEqual(payload["path"], _api("/groups"))
         self.assertIsInstance(payload.get("detail"), list)
 
     def test_put_group_settings_validation_error_response_shape(self) -> None:
         with TestClient(app) as client:
-            response = client.put("/groups/1/settings", json={}, headers=self.auth_headers)
+            response = client.put(_api("/groups/1/settings"), json={}, headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 422)
         payload = response.json()
         self.assertEqual(payload["code"], "REQUEST_VALIDATION_ERROR")
         self.assertEqual(payload["message"], "请求参数校验失败")
-        self.assertEqual(payload["path"], "/groups/1/settings")
+        self.assertEqual(payload["path"], _api("/groups/1/settings"))
         self.assertIsInstance(payload.get("detail"), list)
 
     def test_patch_group_authorization_not_found_error_response_shape(self) -> None:
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
                 response = client.patch(
-                    "/groups/10086/authorization",
+                    _api("/groups/10086/authorization"),
                     json={"is_authorized": True},
                     headers=self.auth_headers,
                 )
@@ -138,23 +148,23 @@ class ApiExceptionHandlingTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["code"], "RESOURCE_NOT_FOUND")
         self.assertEqual(payload["message"], "群组不存在")
-        self.assertEqual(payload["path"], "/groups/10086/authorization")
+        self.assertEqual(payload["path"], _api("/groups/10086/authorization"))
 
     def test_unexpected_error_response_shape(self) -> None:
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceBoom()):
             with TestClient(app, raise_server_exceptions=False) as client:
-                response = client.get("/groups/10010", headers=self.auth_headers)
+                response = client.get(_api("/groups/10010"), headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 500)
         payload = response.json()
         self.assertEqual(payload["code"], "INTERNAL_SERVER_ERROR")
         self.assertEqual(payload["message"], "服务器内部错误")
-        self.assertEqual(payload["path"], "/groups/10010")
+        self.assertEqual(payload["path"], _api("/groups/10010"))
 
     def test_moderation_list_reason_exposed(self) -> None:
         with patch("app.api.moderation.get_moderation_service", return_value=_ModerationServiceStub()):
             with TestClient(app) as client:
-                response = client.get("/moderation", headers=self.auth_headers)
+                response = client.get(_api("/moderation"), headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -164,7 +174,7 @@ class ApiExceptionHandlingTests(unittest.TestCase):
     def test_moderation_detail_exposes_structured_result_detail(self) -> None:
         with patch("app.api.moderation.get_moderation_service", return_value=_ModerationServiceStub()):
             with TestClient(app) as client:
-                response = client.get("/moderation/1", headers=self.auth_headers)
+                response = client.get(_api("/moderation/1"), headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

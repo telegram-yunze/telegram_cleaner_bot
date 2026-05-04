@@ -8,6 +8,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import app.config as config_module
+from app.config import get_settings
 from app.deps import get_db
 from app.main import app
 from app.models.enums import GroupChatType
@@ -19,6 +20,15 @@ async def _override_get_db():
     """测试阶段注入空会话，避免真实数据库连接。"""
 
     yield None
+
+
+def _api(path: str) -> str:
+    """按配置拼接 API 路径，保证测试与 API_PREFIX 一致。"""
+
+    prefix = get_settings().api_prefix
+    if not prefix:
+        return path
+    return f"{prefix}{path}"
 
 
 class _GroupServiceNotFound:
@@ -106,7 +116,7 @@ class ApiAuthTests(unittest.TestCase):
 
     def test_protected_endpoint_without_api_key_returns_401(self) -> None:
         with TestClient(app) as client:
-            response = client.get("/groups/1")
+            response = client.get(_api("/groups/1"))
 
         self.assertEqual(response.status_code, 401)
         payload = response.json()
@@ -115,7 +125,7 @@ class ApiAuthTests(unittest.TestCase):
 
     def test_protected_endpoint_with_wrong_api_key_returns_401(self) -> None:
         with TestClient(app) as client:
-            response = client.get("/groups/1", headers={"X-API-Key": "wrong-key"})
+            response = client.get(_api("/groups/1"), headers={"X-API-Key": "wrong-key"})
 
         self.assertEqual(response.status_code, 401)
         payload = response.json()
@@ -125,7 +135,7 @@ class ApiAuthTests(unittest.TestCase):
         valid_key = config_module.get_runtime_api_secret_key()
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/1", headers={"X-API-Key": valid_key})
+                response = client.get(_api("/groups/1"), headers={"X-API-Key": valid_key})
 
         # 鉴权通过后才会进入业务层，当前 mock 返回不存在，因此应为 404 而非 401
         self.assertEqual(response.status_code, 404)
@@ -135,7 +145,7 @@ class ApiAuthTests(unittest.TestCase):
     def test_public_endpoints_do_not_require_api_key(self) -> None:
         with TestClient(app) as client:
             root_response = client.get("/")
-            health_response = client.get("/health")
+            health_response = client.get(_api("/health"))
 
         self.assertEqual(root_response.status_code, 200)
         self.assertEqual(health_response.status_code, 200)
@@ -145,7 +155,7 @@ class ApiAuthTests(unittest.TestCase):
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceForPatch()):
             with TestClient(app) as client:
                 response = client.patch(
-                    "/groups/1",
+                    _api("/groups/1"),
                     headers={"X-API-Key": valid_key},
                     json={"is_authorized": True},
                 )
@@ -159,7 +169,7 @@ class ApiAuthTests(unittest.TestCase):
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceForAuthorizationPatch()):
             with TestClient(app) as client:
                 response = client.patch(
-                    "/groups/1/authorization",
+                    _api("/groups/1/authorization"),
                     headers={"X-API-Key": valid_key},
                     json={"is_authorized": False},
                 )
@@ -173,7 +183,7 @@ class ApiAuthTests(unittest.TestCase):
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceForSettingsPut()):
             with TestClient(app) as client:
                 response = client.put(
-                    "/groups/1/settings",
+                    _api("/groups/1/settings"),
                     headers={"X-API-Key": valid_key},
                     json={
                         "settings": GroupSettings(

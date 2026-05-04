@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.config import get_runtime_api_secret_key
 from app.deps import get_db
 from app.exceptions import ResourceNotFoundError
@@ -17,6 +18,15 @@ _UUID_HEX_RE = re.compile(r"^[0-9a-f]{32}$")
 async def _override_get_db():
     """测试阶段注入空会话，避免真实数据库连接。"""
     yield None
+
+
+def _api(path: str) -> str:
+    """按配置拼接 API 路径，保证测试与 API_PREFIX 一致。"""
+
+    prefix = get_settings().api_prefix
+    if not prefix:
+        return path
+    return f"{prefix}{path}"
 
 
 class _GroupServiceNotFound:
@@ -40,7 +50,7 @@ class RequestIdIntegrationTests(unittest.TestCase):
     def test_response_header_has_auto_request_id(self) -> None:
         """未提供 X-Request-ID 时，响应头应自动生成 32 位 hex。"""
         with TestClient(app) as client:
-            response = client.get("/health")
+            response = client.get(_api("/health"))
 
         request_id = response.headers.get("X-Request-ID")
         self.assertIsNotNone(request_id)
@@ -50,7 +60,7 @@ class RequestIdIntegrationTests(unittest.TestCase):
         """提供 X-Request-ID 时，响应头应回写相同 ID。"""
         custom_id = "abc123def456789012345678901234ab"
         with TestClient(app) as client:
-            response = client.get("/health", headers={"X-Request-ID": custom_id})
+            response = client.get(_api("/health"), headers={"X-Request-ID": custom_id})
 
         self.assertEqual(response.headers.get("X-Request-ID"), custom_id)
 
@@ -60,7 +70,7 @@ class RequestIdIntegrationTests(unittest.TestCase):
         headers = {**self.auth_headers, "X-Request-ID": custom_id}
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/99999999", headers=headers)
+                response = client.get(_api("/groups/99999999"), headers=headers)
 
         self.assertEqual(response.status_code, 404)
         body = response.json()
@@ -71,7 +81,7 @@ class RequestIdIntegrationTests(unittest.TestCase):
         """自动生成的 request_id 在响应体与响应头中应一致。"""
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/99999999", headers=self.auth_headers)
+                response = client.get(_api("/groups/99999999"), headers=self.auth_headers)
 
         self.assertEqual(response.status_code, 404)
         body_id = response.json().get("request_id")
@@ -83,13 +93,13 @@ class RequestIdIntegrationTests(unittest.TestCase):
         """404 错误响应体应包含 code/message/request_id/timestamp/path。"""
         with patch("app.api.groups.get_group_service", return_value=_GroupServiceNotFound()):
             with TestClient(app) as client:
-                response = client.get("/groups/99999999", headers=self.auth_headers)
+                response = client.get(_api("/groups/99999999"), headers=self.auth_headers)
 
         body = response.json()
         for field in ("code", "message", "request_id", "timestamp", "path"):
             self.assertIn(field, body, msg=f"缺少字段: {field}")
         self.assertEqual(body["code"], "RESOURCE_NOT_FOUND")
-        self.assertEqual(body["path"], "/groups/99999999")
+        self.assertEqual(body["path"], _api("/groups/99999999"))
 
 
 if __name__ == "__main__":

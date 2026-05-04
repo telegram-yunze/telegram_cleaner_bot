@@ -91,6 +91,24 @@ class Settings(BaseSettings):
             raise ValueError(f"telegram_run_mode 只允许 {allowed}，当前值: {v!r}")
         return normalized
 
+    @field_validator("api_prefix")
+    @classmethod
+    def validate_api_prefix(cls, v: str) -> str:
+        """校验并归一化 API 路由前缀。
+
+        允许空字符串（表示不使用前缀）；非空必须以 / 开头。
+        非根路径会移除末尾 /，避免出现双斜杠路由。
+        """
+
+        normalized = v.strip()
+        if normalized == "":
+            return ""
+        if not normalized.startswith("/"):
+            raise ValueError(f"api_prefix 必须为空或以 / 开头，当前值: {v!r}")
+        if normalized != "/":
+            normalized = normalized.rstrip("/")
+        return normalized
+
     @field_validator("webhook_path")
     @classmethod
     def validate_webhook_path(cls, v: str) -> str:

@@ -137,7 +137,7 @@ app = FastAPI(
 configure_logging(get_settings().log_level)
 app.add_middleware(RequestContextMiddleware)
 register_exception_handlers(app)
-app.include_router(api_router)
+app.include_router(api_router, prefix=get_settings().api_prefix)
 
 
 @app.get(

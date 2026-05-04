@@ -34,14 +34,30 @@ class GroupActivityTracker:
         self._deadlock_retry_attempts = settings.group_activity_deadlock_retry_attempts
         self._deadlock_retry_base_delay_seconds = settings.group_activity_deadlock_retry_base_delay_seconds
 
+        self._bound_loop: asyncio.AbstractEventLoop | None = None
         self._lock = asyncio.Lock()
         self._pending: dict[int, datetime] = {}
         self._stop_event = asyncio.Event()
         self._loop_task: asyncio.Task[None] | None = None
 
+    def _ensure_loop_context(self) -> None:
+        """确保同步原语绑定到当前事件循环。
+
+        TestClient 等场景会频繁创建新事件循环；全局单例若复用旧 loop 绑定的
+        Event/Lock 会触发 "bound to a different event loop"。这里按需重建原语。
+        """
+
+        current_loop = asyncio.get_running_loop()
+        if self._bound_loop is current_loop:
+            return
+        self._bound_loop = current_loop
+        self._lock = asyncio.Lock()
+        self._stop_event = asyncio.Event()
+
     async def enqueue(self, telegram_group_id: int, last_message_at: datetime) -> None:
         """记录一次群消息触达，仅保留同群最大时间戳。"""
 
+        self._ensure_loop_context()
         normalized = self._normalize_to_utc_naive(last_message_at)
         async with self._lock:
             existing = self._pending.get(telegram_group_id)
@@ -51,6 +67,7 @@ class GroupActivityTracker:
     async def start(self) -> None:
         """启动后台刷新循环。"""
 
+        self._ensure_loop_context()
         if self._loop_task is not None and not self._loop_task.done():
             return
         self._stop_event.clear()
@@ -64,6 +81,7 @@ class GroupActivityTracker:
     async def stop(self) -> None:
         """停止后台刷新循环，并尽力执行一次最终 flush。"""
 
+        self._ensure_loop_context()
         self._stop_event.set()
         if self._loop_task is not None and not self._loop_task.done():
             self._loop_task.cancel()
@@ -79,6 +97,7 @@ class GroupActivityTracker:
     async def flush_once(self) -> GroupActivityFlushResult:
         """刷新当前缓冲中的群活跃时间，失败仅告警不抛出。"""
 
+        self._ensure_loop_context()
         batch = await self._pop_batch()
         result = GroupActivityFlushResult(attempted_groups=len(batch))
         if not batch:
