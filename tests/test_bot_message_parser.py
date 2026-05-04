@@ -171,13 +171,17 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "app.services.bot_message_parser.set_group_user_cache_missing",
             new=AsyncMock(),
-        ):
+        ), patch(
+            "app.services.bot_message_parser.enqueue_group_activity",
+            new=AsyncMock(),
+        ) as mock_enqueue:
             context = await service.ParseAndSave(message)
 
         self.assertTrue(context.should_skip)
         self.assertEqual(context.skip_reason, "group_not_authorized")
         self.assertEqual(auto_register_service.calls, 1)
         self.assertFalse(group_repo.updated_last_message)
+        mock_enqueue.assert_not_awaited()
 
     async def test_parse_and_save_saves_new_group_text_message(self) -> None:
         group_repo = _FakeGroupRepository()
@@ -229,7 +233,10 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "app.services.bot_message_parser.try_acquire_group_user_profile_refresh_suppress",
             new=AsyncMock(return_value=False),
-        ):
+        ), patch(
+            "app.services.bot_message_parser.enqueue_group_activity",
+            new=AsyncMock(),
+        ) as mock_enqueue:
             context = await service.ParseAndSave(message)
 
         self.assertFalse(context.should_skip)
@@ -237,7 +244,7 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.persisted_message_id, 9527)
         self.assertIn("https://example.com", context.links)
         self.assertIn("@alice", context.mentions)
-        self.assertTrue(group_repo.updated_last_message)
+        mock_enqueue.assert_awaited_once()
         self.assertIsNotNone(msg_repo.saved_entity)
         self.assertEqual(auto_register_service.calls, 0)
 
@@ -259,6 +266,65 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(affected, 1)
         self.assertEqual(msg_repo.updated_hit_result, (9527, "kw_ad", 1.0))
+
+    async def test_parse_and_save_should_not_fail_when_enqueue_group_activity_failed(self) -> None:
+        msg_repo = _FakeGroupMessageRepository()
+        service = BotMessageParserService(
+            group_repository=_FakeGroupRepository(),
+            group_user_repository=_FakeGroupUserRepository(
+                group_user=SimpleNamespace(
+                    id=22,
+                    group_id=11,
+                    telegram_user_id=3003,
+                    status=SimpleNamespace(value="active"),
+                    profile_updated_at=datetime.now(timezone.utc),
+                )
+            ),
+            group_message_repository=msg_repo,
+            group_auto_register_service=_FakeGroupAutoRegisterService(
+                group=SimpleNamespace(id=11, telegram_group_id=-1002, is_authorized=True)
+            ),
+        )
+        message = SimpleNamespace(
+            chat=SimpleNamespace(id=-1002, type="group"),
+            message_id=99,
+            from_user=SimpleNamespace(id=3003),
+            text="访问 https://example.com 联系 @alice",
+            caption=None,
+            photo=None,
+            video=None,
+            document=None,
+            sticker=None,
+            forward_origin=None,
+            reply_to_message=None,
+            date=datetime.now(timezone.utc),
+            model_dump=lambda exclude_none=True: {"message_id": 99},
+        )
+
+        with patch(
+            "app.services.bot_message_parser.get_group_access_cache",
+            new=AsyncMock(return_value={"group_id": 11, "is_authorized": True}),
+        ), patch(
+            "app.services.bot_message_parser.get_group_user_cache",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "app.services.bot_message_parser.set_group_user_cache_found",
+            new=AsyncMock(),
+        ), patch(
+            "app.services.bot_message_parser.set_group_user_cache_missing",
+            new=AsyncMock(),
+        ), patch(
+            "app.services.bot_message_parser.try_acquire_group_user_profile_refresh_suppress",
+            new=AsyncMock(return_value=False),
+        ), patch(
+            "app.services.bot_message_parser.enqueue_group_activity",
+            new=AsyncMock(side_effect=RuntimeError("queue unavailable")),
+        ):
+            context = await service.ParseAndSave(message)
+
+        self.assertFalse(context.should_skip)
+        self.assertEqual(context.persisted_message_id, 9527)
+        self.assertIsNotNone(msg_repo.saved_entity)
 
     async def test_parse_and_save_creates_group_user_when_not_exists(self) -> None:
         group_repo = _FakeGroupRepository()

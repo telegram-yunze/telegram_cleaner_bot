@@ -32,6 +32,7 @@ from app.db.session import dispose_engine
 from app.exception_handlers import register_exception_handlers
 from app.middleware.request_context import RequestContextMiddleware
 from app.tasks.group_info_sync import run_group_info_sync_loop
+from app.services.group_activity_tracker import get_group_activity_tracker
 from app.utils.logger import configure_logging, get_logger
 
 OPENAPI_TAGS = [
@@ -89,6 +90,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     settings = get_settings()
     await setup_cache()
+    await get_group_activity_tracker().start()
     telegram_runtime = await initialize_telegram_runtime(settings)
     await start_polling_if_needed(settings, telegram_runtime)
     if telegram_runtime.bot is not None:
@@ -104,6 +106,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             except asyncio.CancelledError:
                 logger.info("群组信息定时同步任务已停止")
         _group_info_sync_task = None
+
+        await get_group_activity_tracker().stop()
 
         await shutdown_telegram_runtime()
         await cache.close()

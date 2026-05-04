@@ -27,6 +27,7 @@ from app.repositories.group_repository import (
     GroupRepositoryProtocol,
     GroupUserRepositoryProtocol,
 )
+from app.services.group_activity_tracker import enqueue_group_activity
 from app.services.group_auto_register_service import GroupAutoRegisterServiceProtocol
 from app.services.bot_flow_models import ParsedMessageContext
 from app.utils.logger import get_logger
@@ -148,10 +149,19 @@ class BotMessageParserService:
             deleted_at=None,
         )
         saved = await self._group_message_repository.Save(entity)
-        await self._group_repository.UpdateLastMessageAtByTelegramGroupId(
-            telegram_group_id=telegram_group_id,
-            last_message_at=sent_at,
-        )
+        try:
+            # 群活跃时间更新与消息主事务解耦，避免高并发下因死锁导致整笔消息回滚。
+            await enqueue_group_activity(
+                telegram_group_id=telegram_group_id,
+                last_message_at=sent_at,
+            )
+        except Exception as exc:
+            logger.warning(
+                "群活跃触达入队失败，已降级不阻断主流程: telegram_group_id=%s message_id=%s error=%s",
+                telegram_group_id,
+                telegram_message_id,
+                str(exc),
+            )
 
         return ParsedMessageContext(
             group_id=group_id,

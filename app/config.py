@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     group_user_profile_stale_days: int = 1
     # 同一成员异步刷新抑制窗口（秒），避免短时间内重复触发刷新
     group_user_profile_refresh_suppress_seconds: int = 120
+    # 群活跃时间聚合刷新间隔（秒），用于将高频消息写放大降为批量更新
+    group_activity_flush_interval_seconds: float = 1.0
+    # 每次刷新处理的最大群组数，防止单次 flush 长时间占用事件循环
+    group_activity_flush_batch_size: int = 200
+    # 遇到 MySQL 1213 死锁时的最大重试次数
+    group_activity_deadlock_retry_attempts: int = 3
+    # 死锁重试基础退避时长（秒），采用指数退避
+    group_activity_deadlock_retry_base_delay_seconds: float = 0.05
     # ── 安全 ─────────────────────────────────────────────────────────────────
     # API 鉴权密钥；生产必须设置为足够随机的字符串
     api_secret_key: str = ""
@@ -99,6 +107,33 @@ class Settings(BaseSettings):
 
         if v <= 0:
             raise ValueError(f"telegram_polling_timeout 必须大于 0，当前值: {v}")
+        return v
+
+    @field_validator(
+        "group_user_cache_ttl_seconds",
+        "group_user_missing_cache_ttl_seconds",
+        "group_user_profile_refresh_suppress_seconds",
+        "group_activity_flush_batch_size",
+        "group_activity_deadlock_retry_attempts",
+    )
+    @classmethod
+    def validate_positive_int_settings(cls, v: int) -> int:
+        """校验需为正整数的配置项。"""
+
+        if v <= 0:
+            raise ValueError(f"配置项必须大于 0，当前值: {v}")
+        return v
+
+    @field_validator(
+        "group_activity_flush_interval_seconds",
+        "group_activity_deadlock_retry_base_delay_seconds",
+    )
+    @classmethod
+    def validate_positive_float_settings(cls, v: float) -> float:
+        """校验需为正数的浮点配置项。"""
+
+        if v <= 0:
+            raise ValueError(f"配置项必须大于 0，当前值: {v}")
         return v
 
     @property

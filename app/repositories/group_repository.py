@@ -191,11 +191,18 @@ class GroupRepository(GroupRepositoryProtocol):
 		telegram_group_id: int,
 		last_message_at: datetime,
 	) -> int:
-		"""更新群组最近消息时间，用于活跃度统计和增量同步。"""
+		"""更新群组最近消息时间，用于活跃度统计和增量同步。
+
+		仅当新时间更晚时才更新，避免乱序消息导致时间回退。
+		"""
 
 		stmt = (
 			update(Group)
 			.where(Group.telegram_group_id == telegram_group_id)
+			.where(
+				(Group.last_message_at.is_(None))
+				| (Group.last_message_at < last_message_at)
+			)
 			.values(last_message_at=last_message_at)
 		)
 		result = cast(CursorResult[object], await self._session.execute(stmt))
