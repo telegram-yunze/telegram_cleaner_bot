@@ -11,6 +11,7 @@ from app.repositories.moderation_repository import ModerationRepository
 from app.repositories.rule_repository import RuleRepository
 from app.services.ad_detector import AdDetectorService
 from app.services.bot_message_parser import BotMessageParserService
+from app.services.group_auto_register_service import GroupAutoRegisterService
 from app.services.group_service import GroupService
 from app.services.moderation_action_executor import ModerationActionExecutorService
 from app.services.moderation_service import ModerationService
@@ -39,6 +40,12 @@ def get_group_service(session: AsyncSession) -> GroupService:
     )
 
 
+def get_group_auto_register_service(session: AsyncSession) -> GroupAutoRegisterService:
+    """装配群组自动建档服务。"""
+
+    return GroupAutoRegisterService(group_repository=GroupRepository(session))
+
+
 def get_rule_service(session: AsyncSession) -> RuleService:
     """装配规则服务及其依赖仓库。"""
 
@@ -65,6 +72,7 @@ def get_bot_message_parser_service(session: AsyncSession) -> BotMessageParserSer
         group_repository=GroupRepository(session),
         group_user_repository=GroupUserRepository(session),
         group_message_repository=GroupMessageRepository(session),
+        group_auto_register_service=get_group_auto_register_service(session),
     )
 
 
@@ -95,6 +103,7 @@ def get_moderation_action_executor_service(
 __all__ = [
     "get_db",
     "get_group_service",
+    "get_group_auto_register_service",
     "get_rule_service",
     "get_moderation_service",
     "get_bot_message_parser_service",

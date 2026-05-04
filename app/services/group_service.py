@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
+from app.cache import invalidate_group_access_cache, set_group_access_cache
 from app.models.enums import ModerationStatus
 from app.models.group import Group
 from app.repositories.group_repository import (
@@ -44,6 +45,11 @@ class GroupService:
 
         entity = Group(**payload.model_dump())
         saved_entity = await self._group_repository.Save(entity)
+        await set_group_access_cache(
+            saved_entity.telegram_group_id,
+            group_id=saved_entity.id,
+            is_authorized=bool(saved_entity.is_authorized),
+        )
         return await self._to_group_read(saved_entity)
 
     async def FindById(self, group_id: int) -> GroupRead | None:
@@ -86,6 +92,11 @@ class GroupService:
             setattr(entity, field_name, field_value)
 
         saved_entity = await self._group_repository.Save(entity)
+        await set_group_access_cache(
+            saved_entity.telegram_group_id,
+            group_id=saved_entity.id,
+            is_authorized=bool(saved_entity.is_authorized),
+        )
         return await self._to_group_read(saved_entity)
 
     async def UpdateLastMessageAtByTelegramGroupId(
@@ -103,7 +114,14 @@ class GroupService:
     async def DeleteById(self, group_id: int) -> bool:
         """按主键删除群组。"""
 
-        return await self._group_repository.DeleteById(group_id)
+        entity = await self._group_repository.FindById(group_id)
+        if entity is None:
+            return False
+
+        deleted = await self._group_repository.DeleteById(group_id)
+        if deleted:
+            await invalidate_group_access_cache(entity.telegram_group_id)
+        return deleted
 
     async def _find_groups_by_query(self, query: GroupQuery) -> Sequence[Group]:
         """按查询条件返回群组实体集合。"""

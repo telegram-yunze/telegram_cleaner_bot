@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -9,6 +10,8 @@ from fastapi.testclient import TestClient
 import app.config as config_module
 from app.deps import get_db
 from app.main import app
+from app.models.enums import GroupChatType
+from app.schemas.group import GroupRead
 
 
 async def _override_get_db():
@@ -20,6 +23,29 @@ async def _override_get_db():
 class _GroupServiceNotFound:
     async def FindById(self, group_id: int):
         return None
+
+
+class _GroupServiceForPatch:
+    async def UpdateById(self, group_id: int, payload):
+        return GroupRead(
+            id=group_id,
+            telegram_group_id=-10001,
+            title="测试群",
+            username=None,
+            chat_type=GroupChatType.SUPERGROUP,
+            description=None,
+            owner_telegram_user_id=None,
+            is_active=True,
+            is_authorized=True,
+            settings=None,
+            bot_permissions=None,
+            last_message_at=None,
+            active_rules_count=0,
+            pending_moderation_count=0,
+            message_count=0,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
 
 
 class ApiAuthTests(unittest.TestCase):
@@ -66,6 +92,20 @@ class ApiAuthTests(unittest.TestCase):
 
         self.assertEqual(root_response.status_code, 200)
         self.assertEqual(health_response.status_code, 200)
+
+    def test_patch_group_is_authorized_with_valid_api_key(self) -> None:
+        valid_key = config_module.get_runtime_api_secret_key()
+        with patch("app.api.groups.get_group_service", return_value=_GroupServiceForPatch()):
+            with TestClient(app) as client:
+                response = client.patch(
+                    "/groups/1",
+                    headers={"X-API-Key": valid_key},
+                    json={"is_authorized": True},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["is_authorized"])
 
     def test_empty_env_secret_generates_runtime_secret_and_keeps_stable(self) -> None:
         with patch("app.config.get_settings", return_value=SimpleNamespace(api_secret_key="")):

@@ -5,6 +5,7 @@ from datetime import timezone
 
 from aiogram.types import Message
 
+from app.cache import get_group_access_cache
 from app.models.enums import MessageType
 from app.models.group_message import GroupMessage
 from app.models.json_types import MessageContentExtra, TelegramRawPayload
@@ -13,6 +14,7 @@ from app.repositories.group_repository import (
     GroupRepositoryProtocol,
     GroupUserRepositoryProtocol,
 )
+from app.services.group_auto_register_service import GroupAutoRegisterServiceProtocol
 from app.services.bot_flow_models import ParsedMessageContext
 
 
@@ -24,10 +26,12 @@ class BotMessageParserService:
         group_repository: GroupRepositoryProtocol,
         group_user_repository: GroupUserRepositoryProtocol,
         group_message_repository: GroupMessageRepositoryProtocol,
+        group_auto_register_service: GroupAutoRegisterServiceProtocol,
     ) -> None:
         self._group_repository = group_repository
         self._group_user_repository = group_user_repository
         self._group_message_repository = group_message_repository
+        self._group_auto_register_service = group_auto_register_service
 
     async def ParseAndSave(self, message: Message) -> ParsedMessageContext:
         """解析并落库群消息；不满足处理条件时返回可短路上下文。"""
@@ -42,23 +46,33 @@ class BotMessageParserService:
                 telegram_message_id=message.message_id,
             )
 
-        group = await self._group_repository.FindByTelegramGroupId(int(message.chat.id))
-        if group is None:
+        telegram_group_id = int(message.chat.id)
+        access_profile = await get_group_access_cache(telegram_group_id)
+        if access_profile is None:
+            group = await self._group_auto_register_service.EnsureGroupRegisteredByChat(message.chat)
+            access_profile = {
+                "group_id": group.id,
+                "is_authorized": bool(group.is_authorized),
+            }
+
+        group_id = int(access_profile["group_id"])
+        if not bool(access_profile["is_authorized"]):
             return self._skip_context(
-                reason="group_not_registered",
-                telegram_group_id=int(message.chat.id),
+                reason="group_not_authorized",
+                telegram_group_id=telegram_group_id,
                 telegram_message_id=message.message_id,
+                group_id=group_id,
             )
 
         telegram_message_id = int(message.message_id)
         existing = await self._group_message_repository.FindByGroupIdAndTelegramMessageId(
-            group.id,
+            group_id,
             telegram_message_id,
         )
         if existing is not None:
             return ParsedMessageContext(
-                group_id=group.id,
-                telegram_group_id=int(message.chat.id),
+                group_id=group_id,
+                telegram_group_id=telegram_group_id,
                 persisted_message_id=existing.id,
                 sender_id=existing.sender_id,
                 telegram_user_id=existing.telegram_user_id,
@@ -71,7 +85,7 @@ class BotMessageParserService:
                 skip_reason="duplicate_message",
             )
 
-        sender_id, telegram_user_id = await self._resolve_sender(group.id, message)
+        sender_id, telegram_user_id = await self._resolve_sender(group_id, message)
         message_type = self._resolve_message_type(message)
         content_text = (message.text or message.caption or "").strip() or None
         links = self._extract_links(content_text)
@@ -93,7 +107,7 @@ class BotMessageParserService:
             sent_at = sent_at.replace(tzinfo=timezone.utc)
 
         entity = GroupMessage(
-            group_id=group.id,
+            group_id=group_id,
             sender_id=sender_id,
             telegram_message_id=telegram_message_id,
             telegram_user_id=telegram_user_id,
@@ -112,13 +126,13 @@ class BotMessageParserService:
         )
         saved = await self._group_message_repository.Save(entity)
         await self._group_repository.UpdateLastMessageAtByTelegramGroupId(
-            telegram_group_id=int(message.chat.id),
+            telegram_group_id=telegram_group_id,
             last_message_at=sent_at,
         )
 
         return ParsedMessageContext(
-            group_id=group.id,
-            telegram_group_id=int(message.chat.id),
+            group_id=group_id,
+            telegram_group_id=telegram_group_id,
             persisted_message_id=saved.id,
             sender_id=sender_id,
             telegram_user_id=telegram_user_id,
@@ -197,11 +211,12 @@ class BotMessageParserService:
         reason: str,
         telegram_group_id: int | None = None,
         telegram_message_id: int | None = None,
+        group_id: int | None = None,
     ) -> ParsedMessageContext:
         """构造短路上下文。"""
 
         return ParsedMessageContext(
-            group_id=None,
+            group_id=group_id,
             telegram_group_id=telegram_group_id,
             persisted_message_id=None,
             sender_id=None,

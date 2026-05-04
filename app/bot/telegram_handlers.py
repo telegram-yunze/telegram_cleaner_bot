@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aiogram import Router
 from aiogram.filters import CommandStart
-from aiogram.types import Message
+from aiogram.types import ChatMemberUpdated, Message
 
 from app.bot.handlers import execute_handler_safely
 from app.bot.responses import load_bot_response
@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.db.session import get_db_session
 from app.deps import (
     get_bot_message_parser_service,
+    get_group_auto_register_service,
     get_moderation_action_executor_service,
     get_rule_matcher_service,
 )
@@ -80,6 +81,35 @@ async def _reply_default_message(message: Message) -> None:
         return
 
 
+def _should_auto_register_my_chat_member_status(status: str | None) -> bool:
+    """仅当机器人成为群成员或管理员时触发建档。"""
+
+    return status in {"member", "administrator"}
+
+
+async def _sync_group_from_my_chat_member(update: ChatMemberUpdated) -> None:
+    """处理机器人入群事件，确保群组信息被自动建档。"""
+
+    chat = update.chat
+    if chat is None or chat.id is None:
+        return
+
+    new_status = str(getattr(update.new_chat_member, "status", "") or "")
+    if not _should_auto_register_my_chat_member_status(new_status):
+        return
+
+    async for session in get_db_session():
+        auto_register_service = get_group_auto_register_service(session)
+        group = await auto_register_service.EnsureGroupRegisteredByChat(chat)
+        logger.info(
+            "my_chat_member 已同步群组: group_id=%s telegram_group_id=%s is_authorized=%s",
+            group.id,
+            group.telegram_group_id,
+            group.is_authorized,
+        )
+        return
+
+
 def build_telegram_router() -> Router:
     """构建 Telegram 路由并复用统一异常处理封装。"""
 
@@ -105,6 +135,22 @@ def build_telegram_router() -> Router:
         if not result.success:
             logger.warning(
                 "Telegram 默认消息处理失败: code=%s message=%s",
+                result.error_code,
+                result.error_message,
+            )
+
+    @router.my_chat_member()
+    async def handle_my_chat_member(update: ChatMemberUpdated) -> None:
+        """机器人入群状态变更处理。"""
+
+        result = await execute_handler_safely(
+            "handle_my_chat_member",
+            _sync_group_from_my_chat_member,
+            update,
+        )
+        if not result.success:
+            logger.warning(
+                "Telegram 入群事件处理失败: code=%s message=%s",
                 result.error_code,
                 result.error_message,
             )

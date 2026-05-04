@@ -3,18 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from app.models.enums import MessageType
 from app.services.bot_message_parser import BotMessageParserService
 
 
 class _FakeGroupRepository:
-    def __init__(self, group: SimpleNamespace | None) -> None:
-        self._group = group
+    def __init__(self) -> None:
         self.updated_last_message = False
-
-    async def FindByTelegramGroupId(self, telegram_group_id: int):
-        return self._group
 
     async def UpdateLastMessageAtByTelegramGroupId(self, telegram_group_id: int, last_message_at: datetime):
         self.updated_last_message = True
@@ -48,14 +45,29 @@ class _FakeGroupMessageRepository:
         return 1
 
 
+class _FakeGroupAutoRegisterService:
+    def __init__(self, group: SimpleNamespace) -> None:
+        self._group = group
+        self.calls = 0
+
+    async def EnsureGroupRegisteredByChat(self, chat):
+        self.calls += 1
+        return self._group
+
+
 class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
     """验证消息解析与最小落库骨架。"""
 
     async def test_parse_and_save_skips_when_group_not_registered(self) -> None:
+        group_repo = _FakeGroupRepository()
+        auto_register_service = _FakeGroupAutoRegisterService(
+            group=SimpleNamespace(id=11, telegram_group_id=-1001, is_authorized=False)
+        )
         service = BotMessageParserService(
-            group_repository=_FakeGroupRepository(group=None),
+            group_repository=group_repo,
             group_user_repository=_FakeGroupUserRepository(group_user=None),
             group_message_repository=_FakeGroupMessageRepository(),
+            group_auto_register_service=auto_register_service,
         )
         message = SimpleNamespace(
             chat=SimpleNamespace(id=-1001, type="supergroup"),
@@ -73,17 +85,28 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
             model_dump=lambda exclude_none=True: {"message_id": 10},
         )
 
-        context = await service.ParseAndSave(message)
+        with patch(
+            "app.services.bot_message_parser.get_group_access_cache",
+            new=AsyncMock(return_value=None),
+        ):
+            context = await service.ParseAndSave(message)
+
         self.assertTrue(context.should_skip)
-        self.assertEqual(context.skip_reason, "group_not_registered")
+        self.assertEqual(context.skip_reason, "group_not_authorized")
+        self.assertEqual(auto_register_service.calls, 1)
+        self.assertFalse(group_repo.updated_last_message)
 
     async def test_parse_and_save_saves_new_group_text_message(self) -> None:
-        group_repo = _FakeGroupRepository(group=SimpleNamespace(id=11))
+        group_repo = _FakeGroupRepository()
         msg_repo = _FakeGroupMessageRepository()
+        auto_register_service = _FakeGroupAutoRegisterService(
+            group=SimpleNamespace(id=11, telegram_group_id=-1002, is_authorized=True)
+        )
         service = BotMessageParserService(
             group_repository=group_repo,
             group_user_repository=_FakeGroupUserRepository(group_user=SimpleNamespace(id=22)),
             group_message_repository=msg_repo,
+            group_auto_register_service=auto_register_service,
         )
         message = SimpleNamespace(
             chat=SimpleNamespace(id=-1002, type="group"),
@@ -101,7 +124,12 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
             model_dump=lambda exclude_none=True: {"message_id": 99},
         )
 
-        context = await service.ParseAndSave(message)
+        with patch(
+            "app.services.bot_message_parser.get_group_access_cache",
+            new=AsyncMock(return_value={"group_id": 11, "is_authorized": True}),
+        ):
+            context = await service.ParseAndSave(message)
+
         self.assertFalse(context.should_skip)
         self.assertEqual(context.message_type, MessageType.TEXT)
         self.assertEqual(context.persisted_message_id, 9527)
@@ -109,13 +137,17 @@ class BotMessageParserTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("@alice", context.mentions)
         self.assertTrue(group_repo.updated_last_message)
         self.assertIsNotNone(msg_repo.saved_entity)
+        self.assertEqual(auto_register_service.calls, 0)
 
     async def test_update_match_result_by_message_id(self) -> None:
         msg_repo = _FakeGroupMessageRepository()
         service = BotMessageParserService(
-            group_repository=_FakeGroupRepository(group=SimpleNamespace(id=11)),
+            group_repository=_FakeGroupRepository(),
             group_user_repository=_FakeGroupUserRepository(group_user=None),
             group_message_repository=msg_repo,
+            group_auto_register_service=_FakeGroupAutoRegisterService(
+                group=SimpleNamespace(id=11, telegram_group_id=-1001, is_authorized=True)
+            ),
         )
 
         affected = await service.UpdateMatchResultByMessageId(

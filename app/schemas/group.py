@@ -40,6 +40,7 @@ class GroupUpdate(BaseModel):
 	description: str | None = Field(default=None, description="群组描述")
 	owner_telegram_user_id: int | None = Field(default=None, description="群主 Telegram 用户 ID")
 	is_active: bool | None = Field(default=None, description="是否启用清理")
+	is_authorized: bool | None = Field(default=None, description="是否已授权使用机器人")
 	settings: GroupSettings | None = Field(default=None, description="群组维度配置")
 	bot_permissions: BotPermissions | None = Field(default=None, description="机器人在群里的权限配置")
 
@@ -49,6 +50,7 @@ class GroupRead(GroupSchemaBase):
 
 	id: int = Field(..., description="群组主键 ID")
 	telegram_group_id: int = Field(..., description="Telegram 群组 ID")
+	is_authorized: bool = Field(default=False, description="是否已授权使用机器人")
 	last_message_at: datetime | None = Field(default=None, description="最近消息时间")
 	active_rules_count: int = Field(default=0, ge=0, description="启用规则数量")
 	pending_moderation_count: int = Field(default=0, ge=0, description="待处理处置数量")
@@ -68,6 +70,7 @@ class GroupListItem(BaseModel):
 	username: str | None = Field(default=None, description="群组公开用户名")
 	chat_type: GroupChatType = Field(..., description="群组类型")
 	is_active: bool = Field(..., description="是否启用清理")
+	is_authorized: bool = Field(default=False, description="是否已授权使用机器人")
 	last_message_at: datetime | None = Field(default=None, description="最近消息时间")
 	active_rules_count: int = Field(default=0, ge=0, description="启用规则数量")
 	pending_moderation_count: int = Field(default=0, ge=0, description="待处理处置数量")
