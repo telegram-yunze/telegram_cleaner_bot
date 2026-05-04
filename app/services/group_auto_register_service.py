@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Protocol
 
 from aiogram.types import Chat
@@ -51,6 +52,8 @@ class GroupAutoRegisterService(GroupAutoRegisterServiceProtocol):
             is_authorized=False,
             settings=None,
             bot_permissions=None,
+            # 首次建档即视为完成一次信息同步，避免刚入库就被定时任务重复扫描。
+            info_updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         saved = await self._group_repository.Save(entity)
         await set_group_access_cache(

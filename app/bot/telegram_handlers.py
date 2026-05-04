@@ -26,59 +26,69 @@ async def _reply_start_message(message: Message) -> None:
     await message.answer(text)
 
 
+async def _do_handle_default_message(message: Message, session: object) -> None:
+    """在已有会话上下文内执行消息处理全流程，可安全使用 return 提前退出。
+
+    重要：此函数由 _reply_default_message 调用。async for 块内禁止直接 return，
+    否则生成器 aclose() 会跳过 commit()，导致所有写入静默回滚。
+    将内层逻辑抽到此处，可自由 return 而不影响外层事务提交。
+    """
+
+    settings = get_settings()
+    parser_service = get_bot_message_parser_service(session)  # type: ignore[arg-type]
+    matcher_service = get_rule_matcher_service(session)  # type: ignore[arg-type]
+    executor_service = get_moderation_action_executor_service(
+        session,  # type: ignore[arg-type]
+        dry_run=settings.telegram_action_dry_run,
+    )
+
+    context = await parser_service.ParseAndSave(message)
+    if context.should_skip:
+        logger.info("消息已跳过: reason=%s message_id=%s", context.skip_reason, context.telegram_message_id)
+        return
+
+    match_result = await matcher_service.MatchFirstRuleByMessageContext(context)
+    if not match_result.hit:
+        logger.info(
+            "消息未命中规则: group_id=%s message_id=%s",
+            context.group_id,
+            context.telegram_message_id,
+        )
+        return
+
+    await parser_service.UpdateMatchResultByMessageId(
+        message_id=context.persisted_message_id,
+        hit_rule_code=match_result.rule_code,
+        risk_score=match_result.risk_score,
+    )
+    logger.info(
+        "命中明细: rule_code=%s risk_score=%s detect_reason=%s",
+        match_result.rule_code,
+        match_result.risk_score,
+        match_result.detect_reason,
+    )
+
+    execution_result = await executor_service.ExecutePlaceholderAction(
+        message=message,
+        context=context,
+        match_result=match_result,
+    )
+    logger.info(
+        "占位处置已执行: record_id=%s status=%s success=%s",
+        execution_result.moderation_record_id,
+        execution_result.status.value,
+        execution_result.success,
+    )
+
+    if match_result.action is not None:
+        await message.answer(f"已命中规则 {match_result.rule_code}，动作 {match_result.action.value} 已进入处理流程。")
+
+
 async def _reply_default_message(message: Message) -> None:
-    """处理普通消息：执行解析、落库、匹配与占位处置。"""
+    """处理普通消息：会话由 get_db_session 管理，内层逻辑委托给 _do_handle_default_message。"""
 
     async for session in get_db_session():
-        settings = get_settings()
-        parser_service = get_bot_message_parser_service(session)
-        matcher_service = get_rule_matcher_service(session)
-        executor_service = get_moderation_action_executor_service(
-            session,
-            dry_run=settings.telegram_action_dry_run,
-        )
-
-        context = await parser_service.ParseAndSave(message)
-        if context.should_skip:
-            logger.info("消息已跳过: reason=%s message_id=%s", context.skip_reason, context.telegram_message_id)
-            return
-
-        match_result = await matcher_service.MatchFirstRuleByMessageContext(context)
-        if not match_result.hit:
-            logger.info(
-                "消息未命中规则: group_id=%s message_id=%s",
-                context.group_id,
-                context.telegram_message_id,
-            )
-            return
-
-        await parser_service.UpdateMatchResultByMessageId(
-            message_id=context.persisted_message_id,
-            hit_rule_code=match_result.rule_code,
-            risk_score=match_result.risk_score,
-        )
-        logger.info(
-            "命中明细: rule_code=%s risk_score=%s detect_reason=%s",
-            match_result.rule_code,
-            match_result.risk_score,
-            match_result.detect_reason,
-        )
-
-        execution_result = await executor_service.ExecutePlaceholderAction(
-            message=message,
-            context=context,
-            match_result=match_result,
-        )
-        logger.info(
-            "占位处置已执行: record_id=%s status=%s success=%s",
-            execution_result.moderation_record_id,
-            execution_result.status.value,
-            execution_result.success,
-        )
-
-        if match_result.action is not None:
-            await message.answer(f"已命中规则 {match_result.rule_code}，动作 {match_result.action.value} 已进入处理流程。")
-        return
+        await _do_handle_default_message(message, session)
 
 
 def _should_auto_register_my_chat_member_status(status: str | None) -> bool:
@@ -107,7 +117,6 @@ async def _sync_group_from_my_chat_member(update: ChatMemberUpdated) -> None:
             group.telegram_group_id,
             group.is_authorized,
         )
-        return
 
 
 def build_telegram_router() -> Router:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -30,6 +31,7 @@ from app.config import (
 from app.db.session import dispose_engine
 from app.exception_handlers import register_exception_handlers
 from app.middleware.request_context import RequestContextMiddleware
+from app.tasks.group_info_sync import run_group_info_sync_loop
 from app.utils.logger import configure_logging, get_logger
 
 OPENAPI_TAGS = [
@@ -56,11 +58,14 @@ OPENAPI_TAGS = [
 ]
 
 logger = get_logger(__name__)
+_group_info_sync_task: asyncio.Task[None] | None = None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """管理应用生命周期：启动时初始化缓存，关闭时释放缓存和数据库连接。"""
+
+    global _group_info_sync_task
 
     runtime_secret = get_runtime_api_secret_key()
     source = get_runtime_api_secret_source()
@@ -86,9 +91,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await setup_cache()
     telegram_runtime = await initialize_telegram_runtime(settings)
     await start_polling_if_needed(settings, telegram_runtime)
+    if telegram_runtime.bot is not None:
+        _group_info_sync_task = asyncio.create_task(run_group_info_sync_loop(telegram_runtime.bot))
+        logger.info("群组信息定时同步任务已挂载")
     try:
         yield
     finally:
+        if _group_info_sync_task is not None and not _group_info_sync_task.done():
+            _group_info_sync_task.cancel()
+            try:
+                await _group_info_sync_task
+            except asyncio.CancelledError:
+                logger.info("群组信息定时同步任务已停止")
+        _group_info_sync_task = None
+
         await shutdown_telegram_runtime()
         await cache.close()
         await dispose_engine()

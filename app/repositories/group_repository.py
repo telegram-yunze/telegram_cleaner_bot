@@ -35,6 +35,17 @@ class GroupRepositoryProtocol(Protocol):
 		last_message_at: datetime,
 	) -> int: ...
 
+	async def FindAllByInfoUpdatedAtBefore(self, threshold: datetime) -> Sequence[Group]: ...
+
+	async def UpdateGroupInfoById(
+		self,
+		group_id: int,
+		title: str | None,
+		username: str | None,
+		description: str | None,
+		info_updated_at: datetime,
+	) -> int: ...
+
 	async def DeleteById(self, group_id: int) -> bool: ...
 
 
@@ -160,6 +171,44 @@ class GroupRepository(GroupRepositoryProtocol):
 			.where(Group.telegram_group_id == telegram_group_id)
 			.values(last_message_at=last_message_at)
 		)
+		result = cast(CursorResult[object], await self._session.execute(stmt))
+		await self._session.flush()
+		return int(result.rowcount or 0)
+
+	async def FindAllByInfoUpdatedAtBefore(self, threshold: datetime) -> Sequence[Group]:
+		"""查询信息更新时间早于阈值（含未同步）的群组列表。"""
+
+		stmt = (
+			select(Group)
+			.where(
+				(Group.info_updated_at.is_(None)) | (Group.info_updated_at < threshold)
+			)
+			.order_by(Group.id.asc())
+		)
+		result = await self._session.scalars(stmt)
+		return result.all()
+
+	async def UpdateGroupInfoById(
+		self,
+		group_id: int,
+		title: str | None,
+		username: str | None,
+		description: str | None,
+		info_updated_at: datetime,
+	) -> int:
+		"""按主键更新群组资料字段，并刷新信息更新时间。"""
+
+		values: dict[str, object] = {
+			"info_updated_at": info_updated_at,
+		}
+		if title is not None:
+			values["title"] = title
+		if username is not None:
+			values["username"] = username
+		if description is not None:
+			values["description"] = description
+
+		stmt = update(Group).where(Group.id == group_id).values(**values)
 		result = cast(CursorResult[object], await self._session.execute(stmt))
 		await self._session.flush()
 		return int(result.rowcount or 0)
