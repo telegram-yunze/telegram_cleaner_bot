@@ -4,6 +4,7 @@ from __future__ import annotations
 # 并通过 get_settings() 提供全局单例，避免重复解析。
 
 from functools import lru_cache
+from pathlib import Path
 from secrets import token_urlsafe
 
 from pydantic import field_validator
@@ -14,7 +15,7 @@ class Settings(BaseSettings):
     """应用全局配置。字段优先从环境变量读取，未配置时使用安全的默认值。"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(Path(__file__).parent.parent / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

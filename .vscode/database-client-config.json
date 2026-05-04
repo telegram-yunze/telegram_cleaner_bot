@@ -30,6 +30,40 @@
             },
             "key": "1777847205696",
             "connectionKey": "database.connections"
+        },
+        "1777860099610": {
+            "host": "hk-cdb-i6t9uppr.sql.tencentcdb.com",
+            "port": 26899,
+            "user": "root",
+            "password": "dbclient_a$PKXpxLk7vPtupBlrxfy8nw==",
+            "dbType": "MySQL",
+            "name": "tencent_develop",
+            "advance": {
+                "idleConfig": {
+                    "enable": true
+                },
+                "includeDatabases": "telegram_cleaner_bot",
+                "hideSystemSchema": true,
+                "usingCustomDatabaseName": false,
+                "groupingTables": false,
+                "loadMetaDataWhenExpandTreeView": true
+            },
+            "treeFeatures": [],
+            "usingSSH": false,
+            "useSocksProxy": false,
+            "useHTTPProxy": false,
+            "global": false,
+            "remark": "Dev",
+            "savePassword": "Forever",
+            "readonly": false,
+            "sort": 14,
+            "useSSL": true,
+            "fs": {
+                "encoding": "utf8",
+                "showHidden": true
+            },
+            "key": "1777860099610",
+            "connectionKey": "database.connections"
         }
     },
     "$schema": "https://cdn.database-client.com/dbclient/schema.json"
