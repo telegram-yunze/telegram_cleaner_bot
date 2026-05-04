@@ -77,7 +77,6 @@ async def sync_stale_group_info_once(bot: Bot) -> None:
         stale_groups = await repository.FindAllByInfoUpdatedAtBefore(threshold)
 
         if not stale_groups:
-            logger.info("群组信息同步扫描完成：无过期群组")
             continue
 
         logger.info("群组信息同步开始：待刷新数量=%s", len(stale_groups))
