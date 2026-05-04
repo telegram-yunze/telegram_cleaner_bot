@@ -80,6 +80,86 @@ class GroupActivityTrackerTests(unittest.IsolatedAsyncioTestCase):
         fake_sessions[0].rollback.assert_awaited_once()
         fake_sessions[1].commit.assert_awaited_once()
 
+    async def test_flush_once_should_aggregate_multiple_groups(self) -> None:
+        tracker = GroupActivityTracker()
+        now = datetime.now(timezone.utc)
+
+        await tracker.enqueue(telegram_group_id=-1001, last_message_at=now)
+        await tracker.enqueue(telegram_group_id=-1002, last_message_at=now)
+
+        with patch.object(
+            tracker,
+            "_update_last_message_at_with_retry",
+            new=AsyncMock(return_value=(True, 0)),
+        ) as mock_update:
+            result = await tracker.flush_once()
+
+        self.assertEqual(result.attempted_groups, 2)
+        self.assertEqual(result.success_groups, 2)
+        self.assertEqual(result.failed_groups, 0)
+        self.assertEqual(result.deadlock_retries, 0)
+        self.assertEqual(mock_update.await_count, 2)
+
+    async def test_flush_once_should_not_raise_when_update_failed(self) -> None:
+        tracker = GroupActivityTracker()
+        await tracker.enqueue(telegram_group_id=-1001, last_message_at=datetime.now(timezone.utc))
+
+        with patch.object(
+            tracker,
+            "_update_last_message_at_with_retry",
+            new=AsyncMock(return_value=(False, 2)),
+        ):
+            result = await tracker.flush_once()
+
+        self.assertEqual(result.attempted_groups, 1)
+        self.assertEqual(result.success_groups, 0)
+        self.assertEqual(result.failed_groups, 1)
+        self.assertEqual(result.deadlock_retries, 2)
+
+    async def test_update_with_retry_should_return_false_when_non_deadlock_operational_error(self) -> None:
+        tracker = GroupActivityTracker()
+
+        non_deadlock_error = OperationalError(
+            statement="UPDATE groups ...",
+            params={},
+            orig=Exception(1205, "Lock wait timeout exceeded; try restarting transaction"),
+        )
+
+        class _FakeSession:
+            def __init__(self) -> None:
+                self.commit = AsyncMock()
+                self.rollback = AsyncMock()
+                self.close = AsyncMock()
+
+        fake_session = _FakeSession()
+
+        class _FakeRepository:
+            def __init__(self, _session) -> None:
+                self._session = _session
+
+            async def UpdateLastMessageAtByTelegramGroupId(self, telegram_group_id: int, last_message_at: datetime) -> int:
+                raise non_deadlock_error
+
+        with patch(
+            "app.services.group_activity_tracker.get_session_factory",
+            return_value=lambda: fake_session,
+        ), patch(
+            "app.services.group_activity_tracker.GroupRepository",
+            new=_FakeRepository,
+        ), patch(
+            "app.services.group_activity_tracker.log_exception",
+            new=lambda *args, **kwargs: None,
+        ):
+            ok, retries = await tracker._update_last_message_at_with_retry(  # type: ignore[attr-defined]
+                telegram_group_id=-1001,
+                last_message_at=datetime.now(timezone.utc),
+            )
+
+        self.assertFalse(ok)
+        self.assertEqual(retries, 0)
+        fake_session.rollback.assert_awaited_once()
+        fake_session.commit.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()
