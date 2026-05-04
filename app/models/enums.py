@@ -72,6 +72,23 @@ class RuleType(StrEnum):
     AI = "ai"
 
 
+class DetectorReasonToken(StrEnum):
+    """广告检测器返回的原因 token。"""
+
+    # 文本中包含链接
+    CONTAINS_LINK = "contains_link"
+    # 文本中包含 @ 提及
+    CONTAINS_MENTION = "contains_mention"
+    # 命中广告关键词
+    AD_KEYWORDS_DETECTED = "ad_keywords_detected"
+    # 短文本且包含链接
+    SHORT_TEXT_WITH_LINK = "short_text_with_link"
+    # 空文本
+    EMPTY_TEXT = "empty_text"
+    # 仅基础分（未命中额外特征）
+    BASE_SCORE = "base_score"
+
+
 class ModerationAction(StrEnum):
     """命中规则后可执行的动作。"""
 

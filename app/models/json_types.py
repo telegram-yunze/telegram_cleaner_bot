@@ -111,6 +111,13 @@ class ModerationResultDetail(JsonStructBase):
     restricted_until: str | None = None
     # 本次处置触发的自动升级动作（如从 WARN 升级为 MUTE），None 表示无升级
     escalated_to: str | None = None
+    # 命中的规则原因文案，便于详情接口展示结构化决策依据
+    rule_reason: str | None = None
+    # 检测器返回的结构化原因列表（例如 contains_link、ad_keywords_detected）
+    # 标准 token 集合：contains_link、contains_mention、ad_keywords_detected、short_text_with_link、empty_text、base_score
+    detector_reasons: list[str] | None = None
+    # 检测器计算得到的风险分（0~1）
+    risk_score: float | None = None
 
 
 class GroupUserProfileExtra(JsonStructBase):

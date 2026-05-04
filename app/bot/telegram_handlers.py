@@ -54,6 +54,12 @@ async def _reply_default_message(message: Message) -> None:
             hit_rule_code=match_result.rule_code,
             risk_score=match_result.risk_score,
         )
+        logger.info(
+            "命中明细: rule_code=%s risk_score=%s detect_reason=%s",
+            match_result.rule_code,
+            match_result.risk_score,
+            match_result.detect_reason,
+        )
 
         execution_result = await executor_service.ExecutePlaceholderAction(
             message=message,

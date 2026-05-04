@@ -4,6 +4,7 @@ import re
 
 from app.models.enums import RuleType
 from app.schemas.rule import RuleRead
+from app.services.ad_detector import AdDetectorService
 from app.services.bot_flow_models import ParsedMessageContext, RuleMatchResult
 from app.services.rule_service import RuleService
 
@@ -11,8 +12,13 @@ from app.services.rule_service import RuleService
 class RuleMatcherService:
     """规则匹配入口服务：按优先级返回首条命中规则。"""
 
-    def __init__(self, rule_service: RuleService) -> None:
+    def __init__(
+        self,
+        rule_service: RuleService,
+        ad_detector_service: AdDetectorService,
+    ) -> None:
         self._rule_service = rule_service
+        self._ad_detector_service = ad_detector_service
 
     async def MatchFirstRuleByMessageContext(self, context: ParsedMessageContext) -> RuleMatchResult:
         """按优先级尝试匹配，返回首条命中结果。"""
@@ -24,6 +30,7 @@ class RuleMatcherService:
         rules = await self._rule_service.FindEnabledByGroupId(context.group_id)
         for rule in rules:
             if self._is_match(rule, text, context.links):
+                detect_result = await self._ad_detector_service.ScoreText(context.content_text)
                 return RuleMatchResult(
                     hit=True,
                     rule_id=rule.id,
@@ -31,7 +38,8 @@ class RuleMatcherService:
                     rule_type=rule.rule_type,
                     action=rule.action,
                     reason=f"命中规则 {rule.code}",
-                    risk_score=1.0,
+                    detect_reason=detect_result.reason,
+                    risk_score=detect_result.score,
                 )
 
         return RuleMatchResult(hit=False, reason="no_rule_matched")

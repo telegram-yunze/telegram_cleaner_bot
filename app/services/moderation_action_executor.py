@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aiogram.types import ChatPermissions, Message
 
-from app.models.enums import ModerationAction, ModerationStatus
+from app.models.enums import DetectorReasonToken, ModerationAction, ModerationStatus
 from app.models.json_types import ModerationResultDetail
 from app.schemas.moderation import ModerationRecordCreate, ModerationRecordUpdate
 from app.services.bot_flow_models import ActionExecutionResult, ParsedMessageContext, RuleMatchResult
@@ -31,6 +31,9 @@ class ModerationActionExecutorService:
         if context.group_id is None or match_result.action is None:
             raise ValueError("执行审核动作缺少必要上下文")
 
+        moderation_reason = self._build_moderation_reason(match_result)
+        base_detail = self._build_base_result_detail(match_result)
+
         created = await self._moderation_service.Create(
             ModerationRecordCreate(
                 group_id=context.group_id,
@@ -39,8 +42,8 @@ class ModerationActionExecutorService:
                 rule_id=match_result.rule_id,
                 action=match_result.action,
                 status=ModerationStatus.PENDING,
-                reason=match_result.reason,
-                result_detail=None,
+                reason=moderation_reason,
+                result_detail=base_detail,
             )
         )
 
@@ -65,7 +68,7 @@ class ModerationActionExecutorService:
 
         await self._moderation_service.UpdateStatusById(
             created.id,
-            ModerationRecordUpdate(status=status, result_detail=detail),
+            ModerationRecordUpdate(status=status, result_detail=self._merge_result_detail(base_detail, detail)),
         )
 
         return ActionExecutionResult(
@@ -73,6 +76,63 @@ class ModerationActionExecutorService:
             status=status,
             success=status is ModerationStatus.SUCCESS,
         )
+
+    def _build_moderation_reason(self, match_result: RuleMatchResult) -> str | None:
+        """组合落库原因，统一保留规则命中说明与风险依据。"""
+
+        rule_reason = (match_result.reason or "").strip()
+        detect_reason = (match_result.detect_reason or "").strip()
+
+        if rule_reason and detect_reason:
+            if detect_reason in rule_reason:
+                return rule_reason
+            return f"{rule_reason} | 风险依据: {detect_reason}"
+        if rule_reason:
+            return rule_reason
+        if detect_reason:
+            return f"风险依据: {detect_reason}"
+        return None
+
+    def _build_base_result_detail(self, match_result: RuleMatchResult) -> ModerationResultDetail:
+        """构建基础结构化详情，保存规则与检测器元数据。"""
+
+        return ModerationResultDetail(
+            rule_reason=(match_result.reason or None),
+            detector_reasons=self._normalize_detector_reasons(match_result.detect_reason),
+            risk_score=match_result.risk_score,
+        )
+
+    def _normalize_detector_reasons(self, detect_reason: str | None) -> list[str] | None:
+        """把检测原因字符串归一化为列表，去空白与重复。"""
+
+        if not detect_reason:
+            return None
+
+        valid_tokens = {token.value for token in DetectorReasonToken}
+        normalized: list[str] = []
+        for item in detect_reason.split(","):
+            token = item.strip()
+            if not token:
+                continue
+
+            # 保持向后兼容：未知 token 不丢弃，仅记录告警。
+            if token not in valid_tokens:
+                logger.warning("检测到非标准 detector token: %s", token)
+
+            if token not in normalized:
+                normalized.append(token)
+        return normalized or None
+
+    def _merge_result_detail(
+        self,
+        base_detail: ModerationResultDetail,
+        action_detail: ModerationResultDetail,
+    ) -> ModerationResultDetail:
+        """合并检测元数据与动作执行结果，避免结构化原因在状态更新时丢失。"""
+
+        merged_data = base_detail.model_dump(exclude_none=True)
+        merged_data.update(action_detail.model_dump(exclude_none=True))
+        return ModerationResultDetail(**merged_data)
 
     async def _dispatch_action(
         self,

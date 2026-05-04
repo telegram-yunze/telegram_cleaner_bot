@@ -1,4 +1,5 @@
 from app.models.enums import (
+    DetectorReasonToken,
     GroupChatType,
     GroupUserRole,
     GroupUserStatus,
@@ -26,6 +27,7 @@ from app.models.notification_recall_record import NotificationRecallRecord
 from app.models.rule import Rule
 
 __all__ = [
+    "DetectorReasonToken",
     "GroupChatType",
     "Group",
     "GroupUserRole",

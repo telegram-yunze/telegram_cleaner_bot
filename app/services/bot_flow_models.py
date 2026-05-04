@@ -33,6 +33,7 @@ class RuleMatchResult:
     rule_type: RuleType | None = None
     action: ModerationAction | None = None
     reason: str | None = None
+    detect_reason: str | None = None
     risk_score: float | None = None
 
 

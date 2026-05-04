@@ -9,6 +9,7 @@ from app.db.session import get_db_session
 from app.repositories.group_repository import GroupMessageRepository, GroupRepository, GroupUserRepository
 from app.repositories.moderation_repository import ModerationRepository
 from app.repositories.rule_repository import RuleRepository
+from app.services.ad_detector import AdDetectorService
 from app.services.bot_message_parser import BotMessageParserService
 from app.services.group_service import GroupService
 from app.services.moderation_action_executor import ModerationActionExecutorService
@@ -70,7 +71,10 @@ def get_bot_message_parser_service(session: AsyncSession) -> BotMessageParserSer
 def get_rule_matcher_service(session: AsyncSession) -> RuleMatcherService:
     """装配规则匹配入口服务。"""
 
-    return RuleMatcherService(rule_service=get_rule_service(session))
+    return RuleMatcherService(
+        rule_service=get_rule_service(session),
+        ad_detector_service=AdDetectorService(),
+    )
 
 
 def get_moderation_action_executor_service(

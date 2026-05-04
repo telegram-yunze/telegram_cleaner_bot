@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import unittest
 
 from app.models.enums import MessageType, ModerationAction, RuleType
+from app.services.ad_detector import AdDetectResult
 from app.services.bot_flow_models import ParsedMessageContext
 from app.services.rule_matcher_service import RuleMatcherService
 from app.schemas.rule import RuleRead
@@ -15,6 +16,14 @@ class _FakeRuleService:
 
     async def FindEnabledByGroupId(self, group_id: int):
         return self._rules
+
+
+class _FakeAdDetectorService:
+    def __init__(self, fixed_score: float) -> None:
+        self._fixed_score = fixed_score
+
+    async def ScoreText(self, text: str | None) -> AdDetectResult:
+        return AdDetectResult(score=self._fixed_score, reason="contains_link")
 
 
 class RuleMatcherServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -37,7 +46,10 @@ class RuleMatcherServiceTests(unittest.IsolatedAsyncioTestCase):
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
-        matcher = RuleMatcherService(rule_service=_FakeRuleService([rule]))
+        matcher = RuleMatcherService(
+            rule_service=_FakeRuleService([rule]),
+            ad_detector_service=_FakeAdDetectorService(0.88),
+        )
         context = ParsedMessageContext(
             group_id=10,
             telegram_group_id=-100,
@@ -55,9 +67,14 @@ class RuleMatcherServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.hit)
         self.assertEqual(result.rule_code, "kw_ad")
         self.assertEqual(result.action, ModerationAction.DELETE)
+        self.assertEqual(result.risk_score, 0.88)
+        self.assertEqual(result.detect_reason, "contains_link")
 
     async def test_match_first_rule_returns_no_hit(self) -> None:
-        matcher = RuleMatcherService(rule_service=_FakeRuleService([]))
+        matcher = RuleMatcherService(
+            rule_service=_FakeRuleService([]),
+            ad_detector_service=_FakeAdDetectorService(0.66),
+        )
         context = ParsedMessageContext(
             group_id=10,
             telegram_group_id=-100,
